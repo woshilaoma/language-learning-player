@@ -20,9 +20,10 @@ npm start
 
 ### 2. Subtitles
 - Loads .srt / .vtt / .ass / .ssa with automatic encoding detection (UTF-8 / UTF-16 / GB18030).
-- **Auto-loading**: when a video starts, the player looks for a matching subtitle in the same folder (`movie.mp4` + `movie.srt`, or `movie.zh.srt`).
-- Manual loading via **Load Subtitle** in the toolbar.
-- The subtitle panel supports full-text search, click-to-seek on any line, and auto-scrolling highlight of the current line.
+- **Bilingual support**: a single subtitle file with two lines per cue (one language per line) is automatically split into primary/secondary; or select two subtitle files together and they are merged on their timelines. Press `S` to cycle the display: both → primary → secondary.
+- **Auto-loading**: when a video starts, the player looks for matching subtitles in the same folder (`movie.mp4` + `movie.srt`, or `movie.zh.srt`) — up to two are combined as bilingual.
+- Manual loading via **Load Subtitle** in the toolbar (multi-select supported).
+- The subtitle panel supports full-text search (both languages), click-to-seek on any line, and auto-scrolling highlight of the current line.
 - Font size is adjustable in Settings; press `H` to show/hide subtitles.
 
 ### 3. Keyboard Shortcuts (all remappable in Settings)
@@ -33,8 +34,9 @@ npm start
 | `↑` / `↓` | Volume ±5 | `M` | Mute |
 | `.` / `,` | Speed up / down (0.25x–3x) | `[` / `]` | Previous / next sentence |
 | `Enter` | Replay current sentence | `L` | Loop current sentence |
-| `H` | Show / hide subtitles | `R` | Record shadowing |
-| `F` | Fullscreen | `PageUp` / `PageDown` | Previous / next video |
+| `H` | Show / hide subtitles | `S` | Switch subtitle language |
+| `R` | Record shadowing | `F` | Fullscreen |
+| `PageUp` / `PageDown` | Previous / next video | | |
 
 ### 4. Two Seek Modes
 - **By seconds**: `←` / `→`; the step size is configurable in Settings (default 5 s).

@@ -64,11 +64,11 @@ ipcMain.handle('dialog:openVideos', async () => {
 
 ipcMain.handle('dialog:openSubtitle', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: '选择字幕文件',
-    properties: ['openFile'],
+    title: '选择字幕文件（可多选，前两个将组成双语）',
+    properties: ['openFile', 'multiSelections'],
     filters: [SUB_FILTER, { name: '所有文件', extensions: ['*'] }]
   });
-  return r.canceled ? null : r.filePaths[0];
+  return r.canceled ? [] : r.filePaths;
 });
 
 ipcMain.handle('dialog:openFolder', async () => {
@@ -98,22 +98,26 @@ ipcMain.handle('file:readSubtitle', async (_e, p) => {
   return { path: p, name: path.basename(p), text: decodeText(buf) };
 });
 
-ipcMain.handle('file:findSubtitleForVideo', async (_e, videoPath) => {
+/* 视频同目录下的全部候选字幕：与视频同名的排最前，
+   其余以视频名为前缀的按文件名长度升序排后；找不到返回 [] */
+ipcMain.handle('file:findSubtitlesForVideo', async (_e, videoPath) => {
   const dir = path.dirname(videoPath);
   const base = path.basename(videoPath, path.extname(videoPath));
   let names;
   try {
     names = await fs.promises.readdir(dir);
   } catch {
-    return null;
+    return [];
   }
   const subs = names.filter(n => SUB_EXTS.includes(path.extname(n).toLowerCase()));
+  const out = [];
   const exact = subs.find(n => path.basename(n, path.extname(n)) === base);
-  if (exact) return path.join(dir, exact);
+  if (exact) out.push(path.join(dir, exact));
   const partial = subs
-    .filter(n => path.basename(n, path.extname(n)).startsWith(base))
+    .filter(n => n !== exact && path.basename(n, path.extname(n)).startsWith(base))
     .sort((a, b) => a.length - b.length);
-  return partial.length ? path.join(dir, partial[0]) : null;
+  for (const n of partial) out.push(path.join(dir, n));
+  return out;
 });
 
 /* 本地 whisper.cpp 命令行识别：写临时 wav -> whisper-cli -> 读 stdout */

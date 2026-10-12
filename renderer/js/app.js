@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const VIDEO_EXTS = ['.mp4', '.m4v', '.mkv', '.webm', '.mov', '.avi', '.wmv', '.ts', '.mpg', '.mpeg', '.3gp', '.ogv', '.flv'];
   const SUB_EXTS = ['.srt', '.ass', '.ssa', '.vtt'];
   const HISTORY_KEY = 'llp.shadowHistory';
+  const SUB_MODE_LABELS = { both: '双语', primary: '原文', secondary: '译文' };
 
   const video = $('#video');
   const subtitleOverlay = $('#subtitleOverlay');
@@ -27,8 +28,29 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  function refreshOverlay() {
-    subtitleOverlay.textContent = (Player.subVisible && lastCue) ? lastCue.text : '';
+  /* 字幕相关按钮与当前显示模式同步：
+     - 「字幕」按钮：非 off 即点亮
+     - 「语言」按钮：显示当前（off 时显示上次）模式的标签，双语模式点亮 */
+  function subUiSync() {
+    $('#btnToggleSub').classList.toggle('active', Player.subMode !== 'off');
+    const shown = Player.subMode !== 'off' ? Player.subMode : (Player.lastSubMode || 'both');
+    $('#btnSubLang').textContent = SUB_MODE_LABELS[shown] || '双语';
+    $('#btnSubLang').classList.toggle('active', shown === 'both');
+  }
+
+  function handleToggleSub() {
+    Player.toggleSub();
+    subUiSync();
+  }
+
+  function handleCycleSubLang() {
+    const m = Player.cycleSubLang();
+    if (m === null) {
+      toast('当前字幕只有一种语言');
+      return;
+    }
+    subUiSync();
+    toast('字幕：' + (SUB_MODE_LABELS[m] || m));
   }
 
   function syncVolumeUi() {
@@ -44,12 +66,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function syncLoopBtn() {
     $('#btnLoopCue').classList.toggle('active', Player.loopCue);
-  }
-
-  function toggleSubUi() {
-    Player.toggleSub();
-    $('#btnToggleSub').classList.toggle('active', Player.subVisible);
-    refreshOverlay();
   }
 
   function changeVolume(d) {
@@ -79,16 +95,30 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  /* 某句主字幕对应的译文：cue.secondary 为空且存在第二字幕轨时，
+     按第二轨时间轴在该句开始时刻找覆盖的译文 */
+  function secondaryTextOf(cue) {
+    if (cue.secondary) return cue.secondary;
+    if (!Player.secondaryCues || !Player.secondaryCues.length) return '';
+    const si = Subtitles.findCueVisibleIndex(Player.secondaryCues, cue.start + 0.01);
+    if (si < 0) return '';
+    const c = Player.secondaryCues[si];
+    return (c.primary != null ? c.primary : c.text) || '';
+  }
+
   function renderSubList() {
     const cues = Player.cues || [];
     const q = ($('#subFilter').value || '').trim().toLowerCase();
     const parts = [];
     for (let i = 0; i < cues.length; i++) {
       const c = cues[i];
-      if (q && String(c.text || '').toLowerCase().indexOf(q) === -1) continue;
+      const primary = (c.primary != null ? c.primary : c.text) || '';
+      const secondary = secondaryTextOf(c);
+      if (q && primary.toLowerCase().indexOf(q) === -1 && secondary.toLowerCase().indexOf(q) === -1) continue;
+      const text = secondary ? primary + '\n' + secondary : primary;
       parts.push('<div class="s-item" data-index="' + i + '">' +
         '<div class="s-time">' + fmtTime(c.start) + ' → ' + fmtTime(c.end) + '</div>' +
-        '<div class="s-text">' + escHtml(c.text || '') + '</div></div>');
+        '<div class="s-text">' + escHtml(text) + '</div></div>');
     }
     $('#subList').innerHTML = parts.join('');
     $('#subCount').textContent = cues.length ? '共 ' + parts.length + ' 句' : '未加载字幕';
@@ -119,15 +149,58 @@ document.addEventListener('DOMContentLoaded', function () {
     return i === -1 ? '' : s.slice(i).toLowerCase();
   }
 
-  async function loadSubtitleFile(path) {
+  /* 加载 1-2 个字幕文件：
+     - 2 个：非 cjk 的作主字幕（原文）、cjk 的作译文轨（各自时间轴合并同屏）；
+             两个都非 cjk 或都 cjk 时按传入顺序前者为主
+     - 1 个：解析后跑 analyzeBilingual 自动拆分「一句两行」的原文/译文
+     opts.expectPath：快速切台守卫 —— 传入播放项路径，字幕就绪后若当前播放项
+     已不是该路径则放弃应用（返回 false）。成功返回 true。 */
+  async function loadSubtitleFiles(paths, opts) {
+    if (!paths || !paths.length) return false;
+    const expectPath = opts && opts.expectPath ? opts.expectPath : null;
+    const isStale = function () {
+      return !!expectPath &&
+        !(Playlist.items[Playlist.current] && Playlist.items[Playlist.current].path === expectPath);
+    };
+    if (paths.length > 2) {
+      toast('已忽略多余的字幕文件');
+      paths = paths.slice(0, 2);
+    }
     try {
-      const sub = await window.native.readSubtitle(path);
-      Player.setCues(Subtitles.parse(sub.text, extOf(path)));
+      if (paths.length === 2) {
+        const subs = await Promise.all(paths.map(function (p) { return window.native.readSubtitle(p); }));
+        const ka = Subtitles.dominantScript(subs[0].text);
+        const kb = Subtitles.dominantScript(subs[1].text);
+        let main, sec;
+        if (ka !== 'cjk' && kb === 'cjk') {
+          main = subs[0]; sec = subs[1];
+        } else if (kb !== 'cjk' && ka === 'cjk') {
+          main = subs[1]; sec = subs[0];
+        } else {
+          main = subs[0]; sec = subs[1];
+        }
+        const cuesP = Subtitles.parse(main.text, extOf(main.path));
+        const cuesS = Subtitles.parse(sec.text, extOf(sec.path));
+        Subtitles.analyzeBilingual(cuesP);
+        if (isStale()) return false;
+        Player.setCues(cuesP, cuesS);
+        renderSubList();
+        switchTab('subs');
+        toast('已加载双语字幕：' + subs[0].name + ' + ' + subs[1].name);
+        return true;
+      }
+      const sub = await window.native.readSubtitle(paths[0]);
+      const cues = Subtitles.parse(sub.text, extOf(paths[0]));
+      const info = Subtitles.analyzeBilingual(cues);
+      if (isStale()) return false;
+      Player.setCues(cues);
       renderSubList();
       switchTab('subs');
-      toast('已加载字幕：' + sub.name);
+      toast(info.bilingual ? '已加载双语字幕：' + sub.name : '已加载字幕：' + sub.name);
+      return true;
     } catch (err) {
       toast('加载字幕失败：' + (err && err.message ? err.message : '未知错误'));
+      return false;
     }
   }
 
@@ -189,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
     statusEl.textContent = '';
     $('#shadowResult').classList.remove('hidden');
 
-    const ref = lastCue ? lastCue.text : '';
+    const ref = lastCue ? (lastCue.primary || lastCue.text) : '';
     const scoreNum = $('#scoreNum');
     let score = null;
     if (ref) {
@@ -240,11 +313,23 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#timeDur').textContent = fmtTime(info.dur);
     $('#btnPlay').textContent = video.paused ? '▶' : '⏸';
   };
-  Player.onCueChange = function (cue, index) {
-    subtitleOverlay.textContent = (cue && Player.subVisible) ? cue.text : '';
+  Player.onCueChange = function (disp, index) {
+    const cue = disp ? disp.cue : null;
     if (cue) {
-      lastCue = cue;
-      $('#shadowRef').textContent = cue.text;
+      lastCue = cue; /* 供跟读参考 */
+      /* 跟读参考只取原文 */
+      $('#shadowRef').textContent = cue.primary || cue.text;
+    }
+    if (Player.subMode === 'off' || !cue) {
+      subtitleOverlay.innerHTML = '';
+    } else {
+      /* 译文模式但字幕没有译文时，兜底显示原文 */
+      const showPrimary = Player.subMode !== 'secondary' || !Player.hasSecondary();
+      const showSecondary = Player.subMode !== 'primary' && !!disp.secondary;
+      let html = '';
+      if (showPrimary) html += '<div class="sub-p">' + escHtml(disp.primary || '') + '</div>';
+      if (showSecondary) html += '<div class="sub-s">' + escHtml(disp.secondary) + '</div>';
+      subtitleOverlay.innerHTML = html;
     }
     highlightSubItem(index);
   };
@@ -263,15 +348,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let loaded = false;
     try {
-      const subPath = await window.native.findSubtitleForVideo(item.path);
+      const subPaths = await window.native.findSubtitlesForVideo(item.path);
       const stillCurrent = Playlist.items[Playlist.current] && Playlist.items[Playlist.current].path === item.path;
-      if (subPath && stillCurrent) {
-        const sub = await window.native.readSubtitle(subPath);
-        Player.setCues(Subtitles.parse(sub.text, extOf(subPath)));
-        renderSubList();
-        loaded = true;
-        toast('已自动加载字幕：' + sub.name);
-      } else if (!subPath) {
+      if (stillCurrent && subPaths.length) {
+        /* expectPath：字幕加载完成后再次核对，防止快速切台时串台 */
+        loaded = await loadSubtitleFiles(subPaths, { expectPath: item.path });
+      } else if (!subPaths.length) {
         toast('未找到匹配的字幕文件，可手动加载');
       }
     } catch (err) {
@@ -287,9 +369,10 @@ document.addEventListener('DOMContentLoaded', function () {
   /* 恢复持久化状态到播放器与 UI */
   Player.setVolume(Settings.get('volume'));
   Player.setSpeed(Settings.get('speed'));
-  Player.subVisible = !!Settings.get('subVisible');
+  Player.subMode = Settings.get('subMode') || 'both';
+  Player.lastSubMode = 'both';
   Player.loopCue = !!Settings.get('loopCue');
-  $('#btnToggleSub').classList.toggle('active', Player.subVisible);
+  subUiSync();
   syncLoopBtn();
   syncVolumeUi();
   updateSpeedLabel();
@@ -311,7 +394,8 @@ document.addEventListener('DOMContentLoaded', function () {
     nextCue: function () { Player.nextCue(); },
     restartCue: function () { Player.restartCue(); },
     loopCue: function () { Player.toggleLoopCue(); syncLoopBtn(); },
-    toggleSub: function () { toggleSubUi(); },
+    toggleSub: function () { handleToggleSub(); },
+    subLang: function () { handleCycleSubLang(); },
     record: function () { toggleRecord(); },
     fullscreen: function () { Player.toggleFullscreen(); },
     prevTrack: function () { Playlist.prev(); },
@@ -338,8 +422,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (ps && ps.length) Playlist.add(ps);
   });
   $('#btnOpenSub').addEventListener('click', async function () {
-    const p = await window.native.chooseSubtitle();
-    if (p) loadSubtitleFile(p);
+    const ps = await window.native.chooseSubtitle();
+    if (!ps || !ps.length) return;
+    loadSubtitleFiles(ps);
   });
   $('#btnClearPlaylist').addEventListener('click', function () {
     Playlist.clear();
@@ -386,7 +471,8 @@ document.addEventListener('DOMContentLoaded', function () {
     Player.setVolume(Number(this.value));
     syncVolumeUi();
   });
-  $('#btnToggleSub').addEventListener('click', function () { toggleSubUi(); });
+  $('#btnToggleSub').addEventListener('click', function () { handleToggleSub(); });
+  $('#btnSubLang').addEventListener('click', function () { handleCycleSubLang(); });
   $('#btnRecord').addEventListener('click', function () { toggleRecord(); });
   $('#btnFullscreen').addEventListener('click', function () { Player.toggleFullscreen(); });
 
@@ -462,6 +548,6 @@ document.addEventListener('DOMContentLoaded', function () {
       else if (SUB_EXTS.indexOf(ext) !== -1) subs.push(p);
     });
     if (videos.length) Playlist.add(videos);
-    subs.forEach(function (p) { loadSubtitleFile(p); });
+    if (subs.length) loadSubtitleFiles(subs);
   });
 });

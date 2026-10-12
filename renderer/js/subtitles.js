@@ -52,6 +52,26 @@ function _stByStart(a, b) {
   return a.start - b.start;
 }
 
+// 判断单行文本的文字体系：统计 CJK 字符（汉字 \u4e00-\u9fff / 扩展A \u3400-\u4dbf、
+// 日文假名 \u3040-\u30ff、韩文谚文 \uac00-\ud7af）与拉丁字母的数量，
+// 多者胜出；两类都为 0（空行或只有数字/符号）返回 '' 表示无法判断
+function lineScript(line) {
+  const s = String(line || '');
+  let cjk = 0;
+  let latin = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if ((c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3400 && c <= 0x4dbf) ||
+        (c >= 0x3040 && c <= 0x30ff) || (c >= 0xac00 && c <= 0xd7af)) {
+      cjk++;
+    } else if ((c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a)) {
+      latin++;
+    }
+  }
+  if (cjk === 0 && latin === 0) return '';
+  return cjk >= latin ? 'cjk' : 'latin';
+}
+
 // SRT / VTT 共用：块内找含 '-->' 的行作时间行（序号行自然被忽略），
 // 其后各行用 \n 连接为文本
 function _stParseCueBlocks(text, skipBlock) {
@@ -163,6 +183,80 @@ const Subtitles = {
     let i = this.findCueIndexAt(cues, t);
     while (i >= 0 && cues[i].end <= t) i--;
     return i;
+  },
+
+  // 整段字幕文本按行投票判断主要文字体系，返回 'cjk' | 'latin' | ''
+  //（无法判断的行不投票；两类票数为 0 时返回 ''）
+  dominantScript(text) {
+    let cjk = 0;
+    let latin = 0;
+    const lines = String(text || '').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const k = lineScript(lines[i]);
+      if (k === 'cjk') cjk++;
+      else if (k === 'latin') latin++;
+    }
+    if (cjk === 0 && latin === 0) return '';
+    return cjk >= latin ? 'cjk' : 'latin';
+  },
+
+  // 分析单条字幕轨是否为「一句两行」的双语字幕。
+  // 对每个 cue 设置 primary（原文）/ secondary（译文，可为 ''），
+  // 返回 { bilingual }。
+  //  - multiLineCues：非空行数 >= 2 的 cue 数
+  //  - mixedCues   ：其中第 1、2 行文字体系不同的数量
+  //  - bilingual = multiLineCues > 0 && mixedCues / multiLineCues >= 0.5
+  // 双语时先投票确定原文（primary）所在行：若多数 cue 是「第 1 行 cjk 且
+  // 第 2 行非 cjk」或相反，primary 取非 cjk 的那行（学习语言通常是外文）；
+  // 否则 primary 固定取第 1 行。单行 cue 的 primary 即该行、secondary 为 ''，
+  // 第 3 行起并入 secondary（\n 连接）。
+  analyzeBilingual(cues) {
+    const list = cues || [];
+    let multiLineCues = 0;
+    let mixedCues = 0;
+    let cjkFirst = 0;  /* 第 1 行 cjk、第 2 行非 cjk 的 cue 数 */
+    let cjkSecond = 0; /* 第 1 行非 cjk、第 2 行 cjk 的 cue 数 */
+    const splitLines = function (cue) {
+      return String(cue.text || '').split('\n').filter(function (l) { return l.trim() !== ''; });
+    };
+    for (let i = 0; i < list.length; i++) {
+      const lines = splitLines(list[i]);
+      if (lines.length < 2) continue;
+      multiLineCues++;
+      const k1 = lineScript(lines[0]);
+      const k2 = lineScript(lines[1]);
+      if (k1 !== k2) mixedCues++;
+      const a = k1 === 'cjk';
+      const b = k2 === 'cjk';
+      if (a && !b) cjkFirst++;
+      else if (b && !a) cjkSecond++;
+    }
+    const bilingual = multiLineCues > 0 && mixedCues / multiLineCues >= 0.5;
+    /* 原文（primary）所在行：多数为「cjk 在上」→ 原文在第 2 行；其余情况取第 1 行 */
+    const primaryPos = cjkFirst > cjkSecond ? 1 : 0;
+    for (let i = 0; i < list.length; i++) {
+      const cue = list[i];
+      if (!bilingual) {
+        cue.primary = cue.text;
+        cue.secondary = '';
+        continue;
+      }
+      const lines = splitLines(cue);
+      if (lines.length === 0) {
+        cue.primary = '';
+        cue.secondary = '';
+      } else if (lines.length === 1) {
+        cue.primary = lines[0];
+        cue.secondary = '';
+      } else if (primaryPos === 0) {
+        cue.primary = lines[0];
+        cue.secondary = lines.slice(1).join('\n');
+      } else {
+        cue.primary = lines[1];
+        cue.secondary = [lines[0]].concat(lines.slice(2)).join('\n');
+      }
+    }
+    return { bilingual: bilingual };
   }
 };
 

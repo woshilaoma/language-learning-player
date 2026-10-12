@@ -13,7 +13,7 @@ const Settings = {
     asrLanguage: 'auto',
     volume: 100,
     speed: 1,
-    subVisible: true,
+    subMode: 'both',
     loopCue: false
   },
 
@@ -23,6 +23,8 @@ const Settings = {
   load() {
     const saved = store.get('llp.settings') || {};
     this.data = Object.assign({}, this.defaults, saved);
+    /* 旧版 subVisible 迁移：曾隐藏字幕且从未写过 subMode → off */
+    if (saved.subVisible === false && !('subMode' in saved)) this.data.subMode = 'off';
     return this.data;
   },
 
@@ -102,3 +104,8 @@ const Settings = {
     });
   }
 };
+
+/* Node 单测支持（浏览器中不执行，无副作用） */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Settings;
+}

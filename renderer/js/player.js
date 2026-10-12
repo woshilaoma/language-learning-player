@@ -1,21 +1,28 @@
-/* 播放器核心：进度、逐句跳转、循环本句、倍速、音量、字幕可见性、全屏 */
+/* 播放器核心：进度、逐句跳转、循环本句、倍速、音量、字幕显示模式、全屏 */
 const Player = {
   SPEEDS: [0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3],
 
   video: null,
   cues: [],
+  secondaryCues: [],          /* 双文件模式下的译文轨（独立时间轴） */
   cueIndex: -1,
   loopCue: false,
-  subVisible: true,
+  subMode: 'both',            /* 'both' | 'primary' | 'secondary' | 'off' */
+  lastSubMode: 'both',        /* 隐藏前的模式，恢复显示用 */
+  lastDisp: { primary: '', secondary: '', cue: null },
 
   /* 由 app 赋值的回调 */
-  onCueChange: null, /* (cue|null, index) */
+  /* onCueChange(disp, index)：disp = { primary, secondary, cue }
+     —— primary/secondary 是当前应显示的原文/译文文本（无则 ''），
+     cue 为当前主字幕对象（可能带 primary/secondary 字段），index 为 -1 时 cue 为 null */
+  onCueChange: null,
   onTime: null,      /* ({ cur, dur }) */
   onEnded: null,     /* () */
 
   init(videoEl) {
     this.video = videoEl;
     this.cues = [];
+    this.secondaryCues = [];
     this.cueIndex = -1;
     videoEl.addEventListener('ended', () => {
       if (this.onEnded) this.onEnded();
@@ -27,11 +34,13 @@ const Player = {
     const v = this.video;
     if (!v) return;
     this.cues = [];
+    this.secondaryCues = [];
     this.cueIndex = -1;
+    this.lastDisp = { primary: '', secondary: '', cue: null };
     v.src = url;
     const p = v.play();
     if (p && p.catch) p.catch(() => { /* 自动播放被拒绝时忽略 */ });
-    if (this.onCueChange) this.onCueChange(null, -1);
+    if (this.onCueChange) this.onCueChange({ primary: '', secondary: '', cue: null }, -1);
   },
 
   play() {
@@ -63,10 +72,14 @@ const Player = {
     if (wasPlaying && v.paused) this.play(); /* 保持播放状态 */
   },
 
-  setCues(cues) {
+  /* 设置字幕：cues 为主字幕轨；secondaryCues 可选，是第二个字幕文件
+     解析出的译文轨（按各自时间轴对齐，不重排）。重置进度并强制刷新一次显示 */
+  setCues(cues, secondaryCues) {
     this.cues = cues || [];
+    this.secondaryCues = Array.isArray(secondaryCues) ? secondaryCues : [];
     this.cueIndex = -1;
-    if (this.onCueChange) this.onCueChange(null, -1);
+    this.lastDisp = { primary: '', secondary: '', cue: null };
+    this.emitCue(true);
   },
 
   activeCueIndex() {
@@ -151,10 +164,39 @@ const Player = {
     return this.video.muted;
   },
 
+  /* 是否存在译文：第二字幕轨非空，或主轨 cue 自带 secondary（单文件双语） */
+  hasSecondary() {
+    if (this.secondaryCues.length > 0) return true;
+    return (this.cues || []).some(function (c) { return !!c.secondary; });
+  },
+
+  /* 设置字幕显示模式（both/primary/secondary/off），持久化并强制刷新当前显示 */
+  setSubMode(m) {
+    this.subMode = m;
+    Settings.set('subMode', m);
+    this.emitCue(true);
+  },
+
+  /* 循环切换语言模式 both → primary → secondary → both；无译文时返回 null。
+     当前为 off 时从上次的模式继续切（顺带恢复显示） */
+  cycleSubLang() {
+    if (!this.hasSecondary()) return null;
+    const order = ['both', 'primary', 'secondary'];
+    const cur = this.subMode !== 'off' ? this.subMode : (this.lastSubMode || 'both');
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    this.setSubMode(next);
+    return next;
+  },
+
+  /* 显示 / 隐藏字幕：隐藏前记住模式，恢复时还原 */
   toggleSub() {
-    this.subVisible = !this.subVisible;
-    Settings.set('subVisible', this.subVisible);
-    return this.subVisible;
+    if (this.subMode !== 'off') {
+      this.lastSubMode = this.subMode;
+      this.setSubMode('off');
+    } else {
+      this.setSubMode(this.lastSubMode || 'both');
+    }
+    return this.subMode;
   },
 
   toggleFullscreen() {
@@ -170,6 +212,34 @@ const Player = {
 
   /* ---------- tick ---------- */
 
+  /* 计算当前时刻的显示内容并按需触发 onCueChange。
+     force=true 时跳过变化检测强制触发（换模式 / 换字幕后刷新显示用） */
+  emitCue(force) {
+    if (!this.video) return;
+    const t = this.video.currentTime;
+    const idx = Subtitles.findCueVisibleIndex(this.cues, t);
+    const cue = idx >= 0 ? this.cues[idx] : null;
+    const disp = { primary: '', secondary: '', cue: cue };
+    if (cue) disp.primary = cue.primary != null ? cue.primary : cue.text;
+    if (cue && cue.secondary) {
+      disp.secondary = cue.secondary;
+    } else {
+      /* 单文件双语未拆出译文、或主轨 cue 无 secondary 时，
+         从第二字幕轨按时间轴找当前译文 */
+      const si = Subtitles.findCueVisibleIndex(this.secondaryCues, t);
+      if (si >= 0) {
+        const c = this.secondaryCues[si];
+        disp.secondary = (c.primary != null ? c.primary : c.text) || '';
+      }
+    }
+    if (force || idx !== this.cueIndex ||
+        disp.primary !== this.lastDisp.primary || disp.secondary !== this.lastDisp.secondary) {
+      this.cueIndex = idx;
+      this.lastDisp = disp;
+      if (this.onCueChange) this.onCueChange(disp, idx);
+    }
+  },
+
   tick() {
     const v = this.video;
     if (!v) return;
@@ -183,10 +253,7 @@ const Player = {
         return;
       }
     }
-    if (idx !== this.cueIndex) {
-      this.cueIndex = idx;
-      if (this.onCueChange) this.onCueChange(idx >= 0 ? this.cues[idx] : null, idx);
-    }
+    this.emitCue(false);
     if (this.onTime) this.onTime({ cur: t, dur: isFinite(v.duration) ? v.duration : 0 });
   }
 };

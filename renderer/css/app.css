@@ -59,6 +59,9 @@ body {
   line-height: 1.5;
 }
 #subtitleOverlay:empty { display: none; }
+/* 双语字幕两行：主行（原文）默认继承，次行（译文）略小略淡 */
+#subtitleOverlay .sub-p { }
+#subtitleOverlay .sub-s { opacity: .82; font-size: .82em; margin-top: 2px; }
 #videoPlaceholder {
   position: absolute;
   inset: 0;

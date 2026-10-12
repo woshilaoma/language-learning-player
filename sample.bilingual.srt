@@ -1,0 +1,19 @@
+1
+00:00:00,500 --> 00:00:03,000
+Hello! Welcome to the Language Learning Player.
+你好！欢迎来到语言学习播放器。
+
+2
+00:00:03,500 --> 00:00:06,500
+This subtitle file is bilingual, one language per line.
+这个字幕文件是双语的，每行一种语言。
+
+3
+00:00:07,000 --> 00:00:10,500
+Press S to switch: both / primary / secondary.
+按 S 键切换：双语 / 仅原文 / 仅译文。
+
+4
+00:00:11,000 --> 00:00:14,000
+You can also load two subtitle files together.
+也可以同时加载两个字幕文件组成双语。
