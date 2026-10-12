@@ -112,6 +112,8 @@ const Player = {
     const i = active >= 0 ? active : this.nearestCueIndex();
     if (i < 0) return;
     this.seekTo(this.cues[i].start + 0.01);
+    /* 暂停状态下重听原声：从句首直接播放（prevCue/nextCue 仍保持原播放状态） */
+    if (this.video.paused) this.play();
   },
 
   toggleLoopCue() {
