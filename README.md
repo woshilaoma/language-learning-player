@@ -26,7 +26,7 @@ npm start
 - **Auto-loading**: when a video starts, the player looks for matching subtitles in the same folder (`movie.mp4` + `movie.srt`, or `movie.zh.srt`) — up to two are combined as bilingual.
 - Manual loading via **Load Subtitle** in the toolbar (multi-select supported).
 - The subtitle panel supports full-text search (both languages), click-to-seek on any line, and auto-scrolling highlight of the current line.
-- **Sentence translation**: click the 「译」 button on the subtitle or press `T` to translate the current line (shown as a golden line under the subtitle).
+- **Sentence translation**: click the 「译」 button on the subtitle or press `T` to translate the current line (shown as a golden line under the subtitle). Press again to hide/show the translation.
 - **Tap-to-look-up words**: click any word (or CJK character) in the subtitle line to get a dictionary popup with pronunciation, part of speech and meanings — plus a 🔊 button to hear it spoken.
 - Font size is adjustable in Settings; press `H` to show/hide subtitles.
 

@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let seeking = false;
   let lastCue = null;        /* 最近一条字幕，跟读参考用 */
   let lastDisp = null;       /* 最近一次字幕显示 { primary, secondary, cue }，整句翻译用 */
+  let transHidden = false;   /* 当前句的译文被手动收起（切换句子后自动重置） */
   let recTimer = null;
   let recStart = 0;
   let lastVoiceBlob = null;  /* 最近一次跟读录音，供「播放我的录音」 */
@@ -309,9 +310,9 @@ document.addEventListener('DOMContentLoaded', function () {
     let html = '';
     if (showPrimary) html += '<div class="sub-p">' + wordify(disp.primary) + '</div>';
     if (showSecondary) html += '<div class="sub-s">' + escHtml(disp.secondary) + '</div>';
-    const cached = Translate.cachedSentence(disp.primary);
+    const cached = !transHidden && Translate.cachedSentence(disp.primary);
     if (cached) html += '<div class="sub-t">' + escHtml(cached) + '</div>';
-    html += '<button class="sub-tr" title="整句翻译（T）">译</button>';
+    html += '<button class="sub-tr' + (cached ? ' active' : '') + '" title="整句翻译（T），再按一次收起/展开">译</button>';
     subtitleOverlay.innerHTML = html;
   }
 
@@ -322,6 +323,12 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     const text = lastDisp.primary;
+    /* 已有译文：再按一次收起；已收起：展开（缓存即时） */
+    if (Translate.cachedSentence(text)) {
+      transHidden = !transHidden;
+      renderOverlay(lastDisp);
+      return;
+    }
     let box = null;
     /* 字幕可见时先在 overlay 上显示「翻译中…」（复用或新建 .sub-t） */
     if (Player.subMode !== 'off' && subtitleOverlay.innerHTML !== '') {
@@ -335,6 +342,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     try {
       await Translate.sentence(text);
+      transHidden = false;
       renderOverlay(lastDisp); /* 缓存已写入，重渲染自动带出译文 */
     } catch (err) {
       if (box && box.parentNode) box.remove();
@@ -464,6 +472,7 @@ document.addEventListener('DOMContentLoaded', function () {
       $('#shadowRef').textContent = cue.primary || cue.text;
     }
     lastDisp = disp;
+    transHidden = false; /* 新句子：收起状态重置 */
     Translate.setCurrentContext(disp && disp.primary ? disp.primary : '');
     Translate.hideWordPopup(); /* 换句后关闭查词弹窗 */
     renderOverlay(disp);

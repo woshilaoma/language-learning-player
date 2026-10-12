@@ -81,6 +81,8 @@ body {
   font-family: inherit;
 }
 .sub-tr:hover { color: #fff; }
+/* 译文显示中 */
+.sub-tr.active { color: #ffd54f; border-color: #8a7430; }
 /* 机翻结果行 */
 .sub-t { color: #ffd54f; opacity: .95; font-size: .82em; margin-top: 2px; }
 #videoPlaceholder {
