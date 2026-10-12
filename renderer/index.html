@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; style-src 'self' 'unsafe-inline'; media-src 'self' file: blob:; connect-src *;">
+<title>语言学习播放器</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">🎬 语言学习播放器</div>
+  <button id="btnOpenVideo" class="btn">打开视频</button>
+  <button id="btnOpenFolder" class="btn">打开文件夹</button>
+  <button id="btnOpenSub" class="btn">加载字幕</button>
+  <div id="nowPlaying" class="now-playing"></div>
+</header>
+
+<main id="layout">
+  <section id="stage">
+    <div id="videoWrap">
+      <video id="video"></video>
+      <div id="subtitleOverlay"></div>
+      <div id="videoPlaceholder">打开视频开始学习<span>支持直接把视频 / 字幕文件拖进窗口</span></div>
+      <div id="recIndicator">● 录音中 <span id="recTime">0.0s</span></div>
+    </div>
+
+    <div id="controls">
+      <button id="btnPrevTrack" class="ctl" title="上一个视频">⏮</button>
+      <button id="btnSeekBack" class="ctl" title="快退">⏪<span id="seekStepLabel">5s</span></button>
+      <button id="btnPlay" class="ctl wide" title="播放 / 暂停（Space）">▶</button>
+      <button id="btnSeekFwd" class="ctl" title="快进">⏩<span id="seekStepLabel2">5s</span></button>
+      <button id="btnNextTrack" class="ctl" title="下一个视频">⏭</button>
+
+      <span class="ctl-time"><span id="timeCur">0:00</span>&nbsp;/&nbsp;<span id="timeDur">0:00</span></span>
+      <input type="range" id="seekBar" min="0" max="1000" value="0" title="播放进度">
+
+      <button id="btnPrevCue" class="ctl" title="上一句字幕（ [ ）">|◀ 上一句</button>
+      <button id="btnNextCue" class="ctl" title="下一句字幕（ ] ）">下一句 ▶|</button>
+      <button id="btnCueRestart" class="ctl" title="回到本句开头（Enter）">↺ 句首</button>
+      <button id="btnLoopCue" class="ctl" title="循环播放本句（L）">🔁 循环本句</button>
+
+      <button id="btnSpeedDown" class="ctl" title="减速">−速</button>
+      <span id="speedLabel" class="ctl-label">1.0x</span>
+      <button id="btnSpeedUp" class="ctl" title="加速">＋速</button>
+
+      <button id="btnMute" class="ctl" title="静音（M）">🔊</button>
+      <input type="range" id="volBar" min="0" max="100" value="100" title="音量" style="width:70px">
+      <span id="volLabel" class="ctl-label">100</span>
+
+      <button id="btnToggleSub" class="ctl active" title="显示 / 隐藏字幕（H）">字幕</button>
+      <button id="btnRecord" class="ctl rec" title="录音跟读评分（R）">🎙 跟读</button>
+      <button id="btnFullscreen" class="ctl" title="全屏（F）">⛶</button>
+    </div>
+  </section>
+
+  <aside id="sidebar">
+    <nav id="tabs">
+      <button class="tab active" data-tab="playlist">列表</button>
+      <button class="tab" data-tab="subs">字幕</button>
+      <button class="tab" data-tab="shadow">跟读</button>
+      <button class="tab" data-tab="settings">设置</button>
+    </nav>
+
+    <div class="page active" data-page="playlist">
+      <div class="page-head">
+        <button id="btnAddVideos" class="btn small">添加视频</button>
+        <button id="btnAddFolder" class="btn small">添加文件夹</button>
+        <button id="btnClearPlaylist" class="btn small danger">清空</button>
+      </div>
+      <ul id="playlist" class="scroll-list"></ul>
+    </div>
+
+    <div class="page" data-page="subs">
+      <div class="page-head">
+        <input id="subFilter" type="text" placeholder="搜索字幕内容…">
+      </div>
+      <div id="subCount" class="muted small-note">未加载字幕</div>
+      <div id="subList" class="scroll-list"></div>
+    </div>
+
+    <div class="page" data-page="shadow">
+      <div class="muted small-note">跟读打分：播放到某句 → 录音（R）→ 语音识别 → 与字幕文本比对打分</div>
+      <div class="shadow-ref-label">当前句子</div>
+      <div id="shadowRef" class="shadow-ref">播放视频后，这里显示当前字幕</div>
+      <div class="shadow-actions">
+        <button id="btnRecord2" class="btn primary">🎙 开始录音（R）</button>
+        <button id="btnHearRef" class="btn" title="跳回本句开头重听原声">↺ 重听原声</button>
+      </div>
+      <div id="shadowStatus" class="small-note"></div>
+      <div id="shadowResult" class="hidden">
+        <div class="score-line"><span id="scoreNum">--</span><span class="score-unit">分</span></div>
+        <div class="diff-label">参考 vs 识别（<span class="ok">正确</span> / <span class="bad">有误</span> / <span class="miss">漏读</span>）</div>
+        <div id="diffRef" class="diff"></div>
+        <div class="diff-label">识别结果</div>
+        <div id="diffHyp" class="diff"></div>
+        <button id="btnPlayMyVoice" class="btn small">▶ 播放我的录音</button>
+      </div>
+      <div class="history-head">最近记录 <button id="btnClearHistory" class="btn small danger">清空</button></div>
+      <ul id="historyList" class="scroll-list"></ul>
+    </div>
+
+    <div class="page" data-page="settings">
+      <div class="scroll-list">
+        <div class="section-title">播放</div>
+        <div class="form-row"><label>快进快退秒数</label><input id="seekStepInput" type="number" min="1" max="600" class="ti" style="width:80px"> <span class="muted small-note">秒</span></div>
+        <div class="form-row"><label>自动播放下一个</label><input id="autoNextCheck" type="checkbox"></div>
+        <div class="form-row"><label>字幕字号</label><input id="subFontRange" type="range" min="16" max="52" style="flex:1"><span id="subFontLabel" class="ctl-label"></span></div>
+
+        <div class="section-title">语音识别（跟读打分用）</div>
+        <div class="form-row"><label>识别方式</label>
+          <select id="providerSelect" class="ti" style="flex:1">
+            <option value="api">OpenAI 兼容接口（OpenAI / Groq / 硅基流动 / 本地 whisper 服务）</option>
+            <option value="whispercli">本地 whisper.cpp 命令行（完全离线）</option>
+          </select>
+        </div>
+        <div id="apiForm">
+          <div class="form-row"><label>服务地址</label><input id="apiEndpoint" type="text" class="ti" placeholder="https://api.openai.com/v1"></div>
+          <div class="form-row"><label>API Key</label><input id="apiKey" type="password" class="ti" placeholder="sk-...（本地服务可留空）"></div>
+          <div class="form-row"><label>模型名</label><input id="apiModel" type="text" class="ti" placeholder="whisper-1 / whisper-large-v3 …"></div>
+        </div>
+        <div id="wcForm" class="hidden">
+          <div class="form-row"><label>程序路径</label><input id="wcExe" type="text" class="ti" placeholder="D:\tools\whisper\whisper-cli.exe"></div>
+          <div class="form-row"><label>模型路径</label><input id="wcModel" type="text" class="ti" placeholder="D:\tools\whisper\models\ggml-base.bin"></div>
+        </div>
+        <div class="form-row"><label>识别语言</label>
+          <select id="asrLanguage" class="ti" style="flex:1">
+            <option value="auto">自动检测</option>
+            <option value="zh">中文</option>
+            <option value="en">英语</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+            <option value="yue">粤语</option>
+            <option value="ru">俄语</option>
+            <option value="fr">法语</option>
+            <option value="de">德语</option>
+            <option value="es">西班牙语</option>
+          </select>
+        </div>
+
+        <div class="section-title">快捷键（点击右侧按键重新绑定，Esc 取消）</div>
+        <div id="hotkeyTable"></div>
+        <div class="form-row"><button id="btnResetHotkeys" class="btn small">恢复默认快捷键</button></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="toast"></div>
+
+<script src="js/utils.js"></script>
+<script src="js/subtitles.js"></script>
+<script src="js/scorer.js"></script>
+<script src="js/recorder.js"></script>
+<script src="js/asr.js"></script>
+<script src="js/hotkeys.js"></script>
+<script src="js/player.js"></script>
+<script src="js/playlist.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

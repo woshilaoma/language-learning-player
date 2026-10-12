@@ -1,0 +1,17 @@
+{
+  "name": "language-learning-player",
+  "productName": "Language Learning Player",
+  "version": "0.1.0",
+  "description": "面向语言学习的视频播放器：字幕、快捷键、逐句跳转、跟读打分、播放列表",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "iconv-lite": "^0.6.3"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

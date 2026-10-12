@@ -1,0 +1,104 @@
+/* 设置：默认值、localStorage 持久化、设置表单双向绑定 */
+const Settings = {
+  defaults: {
+    seekStep: 5,
+    autoNext: true,
+    subFont: 26,
+    provider: 'api',
+    apiEndpoint: 'https://api.openai.com/v1',
+    apiKey: '',
+    apiModel: 'whisper-1',
+    wcExe: '',
+    wcModel: '',
+    asrLanguage: 'auto',
+    volume: 100,
+    speed: 1,
+    subVisible: true,
+    loopCue: false
+  },
+
+  data: {},
+  onChange: null, /* (key, val)，由 app 赋值 */
+
+  load() {
+    const saved = store.get('llp.settings') || {};
+    this.data = Object.assign({}, this.defaults, saved);
+    return this.data;
+  },
+
+  save() {
+    store.set('llp.settings', this.data);
+  },
+
+  get(k) {
+    return this.data[k];
+  },
+
+  set(k, v) {
+    this.data[k] = v;
+    this.save();
+    if (typeof this.onChange === 'function') this.onChange(k, v);
+  },
+
+  bindForm() {
+    const byId = function (id) { return document.getElementById(id); };
+    const seekStepInput = byId('seekStepInput');
+    const autoNextCheck = byId('autoNextCheck');
+    const subFontRange = byId('subFontRange');
+    const subFontLabel = byId('subFontLabel');
+    const providerSelect = byId('providerSelect');
+    const apiForm = byId('apiForm');
+    const wcForm = byId('wcForm');
+    const asrLanguage = byId('asrLanguage');
+
+    const applyProvider = function (v) {
+      apiForm.classList.toggle('hidden', v !== 'api');
+      wcForm.classList.toggle('hidden', v !== 'whispercli');
+    };
+
+    /* 填充当前值 */
+    seekStepInput.value = this.data.seekStep;
+    autoNextCheck.checked = !!this.data.autoNext;
+    subFontRange.value = this.data.subFont;
+    subFontLabel.textContent = this.data.subFont + 'px';
+    providerSelect.value = this.data.provider;
+    applyProvider(this.data.provider);
+    byId('apiEndpoint').value = this.data.apiEndpoint;
+    byId('apiKey').value = this.data.apiKey;
+    byId('apiModel').value = this.data.apiModel;
+    byId('wcExe').value = this.data.wcExe;
+    byId('wcModel').value = this.data.wcModel;
+    asrLanguage.value = this.data.asrLanguage;
+
+    /* 双向绑定：input / change -> set -> onChange */
+    seekStepInput.addEventListener('input', function () {
+      const n = parseInt(this.value, 10);
+      if (!isNaN(n)) Settings.set('seekStep', clamp(n, 1, 600));
+    });
+    autoNextCheck.addEventListener('change', function () {
+      Settings.set('autoNext', this.checked);
+    });
+    subFontRange.addEventListener('input', function () {
+      const v = parseInt(this.value, 10);
+      subFontLabel.textContent = v + 'px';
+      Settings.set('subFont', v);
+    });
+    providerSelect.addEventListener('change', function () {
+      Settings.set('provider', this.value);
+      applyProvider(this.value);
+    });
+    const bindText = function (id, key) {
+      byId(id).addEventListener('input', function () {
+        Settings.set(key, this.value);
+      });
+    };
+    bindText('apiEndpoint', 'apiEndpoint');
+    bindText('apiKey', 'apiKey');
+    bindText('apiModel', 'apiModel');
+    bindText('wcExe', 'wcExe');
+    bindText('wcModel', 'wcModel');
+    asrLanguage.addEventListener('change', function () {
+      Settings.set('asrLanguage', this.value);
+    });
+  }
+};

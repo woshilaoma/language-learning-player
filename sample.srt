@@ -1,0 +1,15 @@
+1
+00:00:00,500 --> 00:00:03,000
+Hello! Welcome to the Language Learning Player.
+
+2
+00:00:03,500 --> 00:00:06,500
+You can load subtitles, jump between sentences,
+
+3
+00:00:07,000 --> 00:00:10,500
+and practice speaking with the microphone.
+
+4
+00:00:11,000 --> 00:00:14,000
+按下 R 键开始跟读练习。

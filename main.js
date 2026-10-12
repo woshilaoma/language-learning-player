@@ -1,0 +1,133 @@
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const { execFile } = require('child_process');
+const iconv = require('iconv-lite');
+
+const SUB_EXTS = ['.srt', '.ass', '.ssa', '.vtt'];
+const VIDEO_EXTS = ['.mp4', '.m4v', '.mkv', '.webm', '.mov', '.avi', '.wmv', '.ts', '.mpg', '.mpeg', '.3gp', '.ogv', '.flv'];
+
+let win = null;
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 1380,
+    height: 880,
+    minWidth: 1080,
+    minHeight: 640,
+    backgroundColor: '#0f1115',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      spellcheck: false
+    }
+  });
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, cb) => {
+    cb(permission === 'media');
+  });
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+}
+
+app.whenReady().then(createWindow);
+app.on('window-all-closed', () => app.quit());
+
+/* ---------------- 字幕解码（UTF-8 / UTF-16 / GB18030 自动识别） ---------------- */
+
+function decodeText(buf) {
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+    return buf.slice(3).toString('utf8');
+  }
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
+    return iconv.decode(buf, 'utf16-le');
+  }
+  const utf8 = buf.toString('utf8');
+  if (!utf8.includes('\uFFFD')) return utf8;
+  return iconv.decode(buf, 'gb18030');
+}
+
+/* ---------------- IPC ---------------- */
+
+const VIDEO_FILTER = { name: '视频', extensions: VIDEO_EXTS.map(e => e.slice(1)) };
+const SUB_FILTER = { name: '字幕', extensions: SUB_EXTS.map(e => e.slice(1)) };
+
+ipcMain.handle('dialog:openVideos', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择视频文件',
+    properties: ['openFile', 'multiSelections'],
+    filters: [VIDEO_FILTER, { name: '所有文件', extensions: ['*'] }]
+  });
+  return r.canceled ? [] : r.filePaths;
+});
+
+ipcMain.handle('dialog:openSubtitle', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择字幕文件',
+    properties: ['openFile'],
+    filters: [SUB_FILTER, { name: '所有文件', extensions: ['*'] }]
+  });
+  return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle('dialog:openFolder', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择文件夹（添加其中的视频）',
+    properties: ['openDirectory']
+  });
+  if (r.canceled || !r.filePaths.length) return [];
+  const dir = r.filePaths[0];
+  let names = [];
+  try {
+    names = await fs.promises.readdir(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter(n => VIDEO_EXTS.includes(path.extname(n).toLowerCase()))
+    .sort()
+    .map(n => path.join(dir, n));
+});
+
+ipcMain.handle('file:readSubtitle', async (_e, p) => {
+  if (!SUB_EXTS.includes(path.extname(p).toLowerCase())) {
+    throw new Error('不支持的字幕格式: ' + path.extname(p));
+  }
+  const buf = await fs.promises.readFile(p);
+  return { path: p, name: path.basename(p), text: decodeText(buf) };
+});
+
+ipcMain.handle('file:findSubtitleForVideo', async (_e, videoPath) => {
+  const dir = path.dirname(videoPath);
+  const base = path.basename(videoPath, path.extname(videoPath));
+  let names;
+  try {
+    names = await fs.promises.readdir(dir);
+  } catch {
+    return null;
+  }
+  const subs = names.filter(n => SUB_EXTS.includes(path.extname(n).toLowerCase()));
+  const exact = subs.find(n => path.basename(n, path.extname(n)) === base);
+  if (exact) return path.join(dir, exact);
+  const partial = subs
+    .filter(n => path.basename(n, path.extname(n)).startsWith(base))
+    .sort((a, b) => a.length - b.length);
+  return partial.length ? path.join(dir, partial[0]) : null;
+});
+
+/* 本地 whisper.cpp 命令行识别：写临时 wav -> whisper-cli -> 读 stdout */
+ipcMain.handle('asr:whisperCli', async (_e, { exePath, modelPath, wavBase64, language }) => {
+  if (!exePath || !modelPath) throw new Error('未配置 whisper.cpp 程序或模型路径');
+  const tmp = path.join(os.tmpdir(), `llp-rec-${Date.now()}.wav`);
+  await fs.promises.writeFile(tmp, Buffer.from(wavBase64, 'base64'));
+  try {
+    const args = ['-m', modelPath, '-f', tmp, '-nt', '-np', '-l', language && language !== 'auto' ? language : 'auto'];
+    const { stdout } = await execFile(exePath, args, { timeout: 120000, maxBuffer: 10 * 1024 * 1024 });
+    return stdout.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean).join(' ');
+  } finally {
+    fs.promises.unlink(tmp).catch(() => {});
+  }
+});
+
+ipcMain.handle('app:version', () => app.getVersion());
