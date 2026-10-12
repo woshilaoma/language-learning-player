@@ -1,77 +1,79 @@
-# 语言学习播放器（Windows 版）
+# Language Learning Player (Windows)
 
-基于 Electron 的本地视频播放器，专为语言学习设计：外挂字幕、逐句精听、可自定义快捷键、麦克风跟读打分、播放列表。
+**English** | [简体中文](README.zh-CN.md)
 
-## 启动
+A local video player built with Electron, designed for language learning: external subtitles, sentence-by-sentence navigation, fully remappable hotkeys, microphone shadowing practice with scoring, and playlists. Everything runs locally — no server, no account.
+
+## Getting Started
 
 ```bash
-npm install     # 首次
+npm install     # first run only
 npm start
 ```
 
-## 功能与用法
+## Features
 
-### 1. 播放视频 / 播放列表
-- 顶栏「打开视频」（可多选）或「打开文件夹」（自动扫描视频文件）加入播放列表。
-- 支持把视频 / 字幕文件直接拖进窗口。
-- 支持格式：mp4、m4v、mkv、webm、mov、avi、wmv、ts、mpg、3gp、ogv、flv。
-- 「设置 → 自动播放下一个」控制播完是否自动切下一个（默认开）。
+### 1. Video Playback & Playlist
+- Add videos via **Open Videos** (multi-select) or **Open Folder** (auto-scans for video files), or just drag & drop files into the window.
+- Supported formats: mp4, m4v, mkv, webm, mov, avi, wmv, ts, mpg, 3gp, ogv, flv.
+- Toggle auto-play-next in Settings (on by default).
 
-### 2. 字幕
-- 支持加载 .srt / .vtt / .ass / .ssa，自动识别编码（UTF-8 / UTF-16 / GB18030）。
-- **自动加载**：播放视频时自动寻找同目录同名字幕（如 `movie.mp4` + `movie.srt`，或 `movie.zh.srt`）。
-- 手动加载：顶栏「加载字幕」。
-- 字幕页支持全文搜索、点击任意句子跳转播放、当前句高亮自动滚动。
-- 字幕字号可在设置中调整；`H` 键隐藏/显示字幕。
+### 2. Subtitles
+- Loads .srt / .vtt / .ass / .ssa with automatic encoding detection (UTF-8 / UTF-16 / GB18030).
+- **Auto-loading**: when a video starts, the player looks for a matching subtitle in the same folder (`movie.mp4` + `movie.srt`, or `movie.zh.srt`).
+- Manual loading via **Load Subtitle** in the toolbar.
+- The subtitle panel supports full-text search, click-to-seek on any line, and auto-scrolling highlight of the current line.
+- Font size is adjustable in Settings; press `H` to show/hide subtitles.
 
-### 3. 快捷键（默认，均可在设置页重新绑定）
-| 按键 | 功能 | 按键 | 功能 |
+### 3. Keyboard Shortcuts (all remappable in Settings)
+
+| Key | Action | Key | Action |
 |---|---|---|---|
-| 空格 | 播放/暂停 | `←` / `→` | 快退/快进（秒数） |
-| `↑` / `↓` | 音量 ±5 | `M` | 静音 |
-| `.` / `,` | 加速/减速（0.25x–3x） | `[` / `]` | 上一句/下一句 |
-| `Enter` | 回到本句开头 | `L` | 循环播放本句 |
-| `H` | 显示/隐藏字幕 | `R` | 录音跟读 |
-| `F` | 全屏 | `PageUp` / `PageDown` | 上一个/下一个视频 |
+| `Space` | Play / pause | `←` / `→` | Seek back / forward (by seconds) |
+| `↑` / `↓` | Volume ±5 | `M` | Mute |
+| `.` / `,` | Speed up / down (0.25x–3x) | `[` / `]` | Previous / next sentence |
+| `Enter` | Replay current sentence | `L` | Loop current sentence |
+| `H` | Show / hide subtitles | `R` | Record shadowing |
+| `F` | Fullscreen | `PageUp` / `PageDown` | Previous / next video |
 
-### 4. 两种快进快退
-- **按秒**：`←` / `→`，秒数在设置页配置（默认 5 秒）。
-- **按句**：`[` / `]` 按字幕时间轴跳上一句/下一句；`Enter` 重听本句；`L` 单句循环（精听模式）。
+### 4. Two Seek Modes
+- **By seconds**: `←` / `→`; the step size is configurable in Settings (default 5 s).
+- **By sentence**: `[` / `]` jumps along the subtitle timeline; `Enter` replays the current sentence; `L` loops a single sentence (intensive listening mode).
 
-### 5. 跟读打分（语音识别）
-播放到某句 → 按 `R` 开始录音 → 再按 `R` 停止 → 自动语音识别 → 与当前字幕文本比对打分（0–100），逐词标注：绿色=正确、红色删除线=漏读、红色下划线=读错。历史记录保留最近 50 条。
+### 5. Shadowing Practice (Speech Recognition)
+Play a sentence → press `R` to start recording → press `R` again to stop → speech recognition runs automatically → your speech is compared with the current subtitle and scored 0–100, with per-word annotation: green = correct, red strikethrough = missed, red underline = mispronounced/extra. The last 50 attempts are kept as history.
 
-识别引擎二选一（设置页配置）：
+Two interchangeable recognition engines (configured in Settings):
 
-**方式 A：OpenAI 兼容接口（推荐，开箱即用）**
-- 服务地址：`https://api.openai.com/v1`，或任意兼容服务（Groq `https://api.groq.com/openai/v1`、硅基流动 `https://api.siliconflow.cn/v1`、本地 `http://127.0.0.1:9000/v1` 等）
-- 模型名：OpenAI 用 `whisper-1`；其他服务参考其文档（如 `whisper-large-v3`）
+**Option A: OpenAI-compatible API (recommended, works out of the box)**
+- Endpoint: `https://api.openai.com/v1`, or any compatible service (Groq `https://api.groq.com/openai/v1`, SiliconFlow `https://api.siliconflow.cn/v1`, local `http://127.0.0.1:9000/v1`, etc.)
+- Model: `whisper-1` for OpenAI; see your provider's docs otherwise (e.g. `whisper-large-v3`)
 
-**方式 B：本地 whisper.cpp（完全离线）**
-1. 下载 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) 编译或获取预编译的 `whisper-cli.exe`
-2. 下载 GGML 模型（如 `ggml-base.bin` 或 `ggml-large-v3.bin`）
-3. 设置页填入两个路径，识别方式选「本地 whisper.cpp 命令行」
+**Option B: Local whisper.cpp (fully offline)**
+1. Get [whisper.cpp](https://github.com/ggml-org/whisper.cpp) — build it or grab a prebuilt `whisper-cli.exe`
+2. Download a GGML model (e.g. `ggml-base.bin` or `ggml-large-v3.bin`)
+3. Fill in both paths in Settings and select "Local whisper.cpp CLI" as the provider
 
-### 6. 数据存储
-设置、快捷键、跟读记录保存在本地（Chromium localStorage），不上传任何数据。
+### 6. Data Storage
+Settings, hotkey bindings and shadowing history are stored locally (Chromium localStorage). Nothing is ever uploaded.
 
-## 目录结构
+## Project Structure
 
 ```
-main.js            主进程：窗口、文件对话框、字幕文件读取、whisper.cpp 调用
-preload.js         桥接层：window.native 安全 API
+main.js            Main process: window, file dialogs, subtitle reading, whisper.cpp invocation
+preload.js         Bridge: safe window.native API
 renderer/
-  index.html       页面结构
-  css/app.css      样式
+  index.html       Page layout
+  css/app.css      Styles
   js/
-    utils.js       工具（时间格式化、toast、存储、file:// URL）
-    subtitles.js   字幕解析（SRT/VTT/ASS/SSA）+ 时间查找
-    scorer.js      文本比对打分（归一化 + LCS 对齐）
-    recorder.js    麦克风采集 → 16kHz WAV
-    asr.js         语音识别（API / whisper.cpp）
-    hotkeys.js     可重绑定的全局快捷键
-    player.js      播放器核心（逐句跳转、循环、倍速）
-    playlist.js    播放列表
-    settings.js    设置持久化 + 表单绑定
-    app.js         入口：全部 UI 接线
+    utils.js       Helpers (time formatting, toast, storage, file:// URLs)
+    subtitles.js   Subtitle parsing (SRT/VTT/ASS/SSA) + timeline lookup
+    scorer.js      Text comparison scoring (normalization + LCS alignment)
+    recorder.js    Microphone capture → 16 kHz WAV
+    asr.js         Speech recognition (API / whisper.cpp)
+    hotkeys.js     Remappable global hotkeys
+    player.js      Player core (sentence jumping, looping, playback speed)
+    playlist.js    Playlist
+    settings.js    Settings persistence + form binding
+    app.js         Entry point: all UI wiring
 ```
