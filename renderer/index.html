@@ -27,6 +27,12 @@
         <div class="wp-head"><span id="wpWord"></span><span class="wp-btns"><button id="wpSpeak" class="wp-btn" title="发音">🔊</button><button id="wpClose" class="wp-btn" title="关闭">✕</button></span></div>
         <div id="wpBody"></div>
       </div>
+      <div id="fsControls">
+        <button id="fsPlay" class="ctl" title="播放 / 暂停（空格）">▶</button>
+        <span id="fsTime" class="ctl-time">0:00 / 0:00</span>
+        <input type="range" id="fsSeek" min="0" max="1000" value="0" title="播放进度">
+        <button id="fsExit" class="ctl" title="退出全屏（F / Esc）">⛶ 退出全屏</button>
+      </div>
     </div>
 
     <div id="controls">

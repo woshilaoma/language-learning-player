@@ -123,6 +123,30 @@ body {
 }
 @keyframes pulse { 50% { opacity: .25; } }
 
+/* ---------- 全屏控制条（仅全屏时显示，静止 3 秒自动隐藏） ---------- */
+#fsControls {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 16px 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .78));
+  transition: opacity .25s;
+  z-index: 30;
+}
+#fsControls .ctl { background: rgba(28, 34, 48, .85); }
+#fsSeek { flex: 1; min-width: 120px; }
+#fsTime { font-size: 13px; }
+/* 全屏时才出现；鼠标静止后淡出并禁点击 */
+#videoWrap:fullscreen #fsControls { display: flex; }
+#videoWrap:fullscreen #fsControls.idle { opacity: 0; pointer-events: none; }
+#videoWrap:fullscreen.cursorIdle { cursor: none; }
+/* 全屏时隐藏占位提示（若有） */
+#videoWrap:fullscreen #videoPlaceholder { display: none; }
+
 /* ---------- 点词查词弹窗 ---------- */
 #wordPopup {
   position: absolute;

@@ -453,11 +453,18 @@ document.addEventListener('DOMContentLoaded', function () {
   Player.init(video);
   Player.onTime = function (info) {
     if (!seeking) {
-      $('#seekBar').value = info.dur > 0 ? Math.round(info.cur / info.dur * 1000) : 0;
+      const pct = info.dur > 0 ? Math.round(info.cur / info.dur * 1000) : 0;
+      $('#seekBar').value = pct;
+      $('#fsSeek').value = pct;
     }
     $('#timeCur').textContent = fmtTime(info.cur);
     $('#timeDur').textContent = fmtTime(info.dur);
     $('#btnPlay').textContent = video.paused ? '▶' : '⏸';
+    /* 全屏控制条同步（仅全屏时写 DOM） */
+    if (document.fullscreenElement) {
+      $('#fsPlay').textContent = video.paused ? '▶' : '⏸';
+      $('#fsTime').textContent = fmtTime(info.cur) + ' / ' + fmtTime(info.dur);
+    }
     /* 播放中节流保存进度 */
     if (!video.paused && Date.now() - lastSave > 5000) {
       lastSave = Date.now();
@@ -659,13 +666,53 @@ document.addEventListener('DOMContentLoaded', function () {
   $('#btnRecord').addEventListener('click', function () { toggleRecord(); });
   $('#btnFullscreen').addEventListener('click', function () { Player.toggleFullscreen(); });
 
-  $('#seekBar').addEventListener('input', function () {
-    seeking = true;
-    const d = video.duration;
-    if (isFinite(d) && d > 0) Player.seekTo(Number(this.value) / 1000 * d);
-  });
-  $('#seekBar').addEventListener('change', function () {
-    seeking = false;
+  /* 进度条（主控制条与全屏控制条共用绑定逻辑） */
+  function bindSeekBar(el) {
+    el.addEventListener('input', function () {
+      seeking = true;
+      const d = video.duration;
+      if (isFinite(d) && d > 0) Player.seekTo(Number(this.value) / 1000 * d);
+    });
+    el.addEventListener('change', function () {
+      seeking = false;
+    });
+  }
+  bindSeekBar($('#seekBar'));
+  bindSeekBar($('#fsSeek'));
+
+  /* ================= 全屏体验 ================= */
+
+  $('#fsPlay').addEventListener('click', function () { Player.toggle(); });
+  $('#fsExit').addEventListener('click', function () { Player.toggleFullscreen(); });
+  /* 双击视频区域：进入 / 退出全屏（字幕 overlay 在 video 之上，不会误触） */
+  video.addEventListener('dblclick', function () { Player.toggleFullscreen(); });
+
+  /* 全屏时鼠标静止 3 秒：控制条淡出 + 隐藏指针；一动即恢复 */
+  let fsIdleTimer = null;
+  function fsActivity() {
+    $('#videoWrap').classList.remove('cursorIdle');
+    $('#fsControls').classList.remove('idle');
+    clearTimeout(fsIdleTimer);
+    if (document.fullscreenElement) {
+      fsIdleTimer = setTimeout(function () {
+        $('#videoWrap').classList.add('cursorIdle');
+        $('#fsControls').classList.add('idle');
+      }, 3000);
+    }
+  }
+  $('#videoWrap').addEventListener('mousemove', fsActivity);
+  $('#fsControls').addEventListener('mousemove', fsActivity);
+  document.addEventListener('fullscreenchange', function () {
+    if (document.fullscreenElement) {
+      fsActivity();
+      /* 进入全屏时立即刷新一次播放状态显示 */
+      $('#fsPlay').textContent = video.paused ? '▶' : '⏸';
+      $('#fsTime').textContent = fmtTime(video.currentTime) + ' / ' + fmtTime(video.duration || 0);
+    } else {
+      clearTimeout(fsIdleTimer);
+      $('#videoWrap').classList.remove('cursorIdle');
+      $('#fsControls').classList.remove('idle');
+    }
   });
 
   /* ================= 字幕页 ================= */

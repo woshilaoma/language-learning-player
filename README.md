@@ -16,6 +16,7 @@ npm start
 ### 1. Video Playback & Playlist
 - Add videos via **Open Videos** (multi-select) or **Open Folder** (auto-scans for video files), or just drag & drop files into the window.
 - Supported formats: mp4, m4v, mkv, webm, mov, avi, wmv, ts, mpg, 3gp, ogv, flv.
+- **Fullscreen**: press `F` or double-click the video. In fullscreen, a control bar (play/pause, seek, exit) slides in when you move the mouse and auto-hides after 3 s of inactivity.
 - Toggle auto-play-next in Settings (on by default).
 - **Resume playback**: each video's position is remembered; the next time you open the app, the last playlist and video are restored (paused at your last position — press Space to continue).
 - **Video ↔ subtitle binding**: once you manually pick subtitles for a video, they are remembered and auto-loaded every time you play that video.
