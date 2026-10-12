@@ -47,6 +47,13 @@ const Playlist = {
     if (this.onChange) this.onChange();
   },
 
+  /* 从持久化状态恢复列表（items 为 [{path,url,name}]，current 可为 -1），不触发播放 */
+  restore(items, current) {
+    this.items = items;
+    this.current = current;
+    if (this.onChange) this.onChange();
+  },
+
   play(i) {
     if (i < 0 || i >= this.items.length) return;
     this.current = i;

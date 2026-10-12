@@ -23,6 +23,10 @@
       <div id="subtitleOverlay"></div>
       <div id="videoPlaceholder">打开视频开始学习<span>支持直接把视频 / 字幕文件拖进窗口</span></div>
       <div id="recIndicator">● 录音中 <span id="recTime">0.0s</span></div>
+      <div id="wordPopup" class="hidden">
+        <div class="wp-head"><span id="wpWord"></span><span class="wp-btns"><button id="wpSpeak" class="wp-btn" title="发音">🔊</button><button id="wpClose" class="wp-btn" title="关闭">✕</button></span></div>
+        <div id="wpBody"></div>
+      </div>
     </div>
 
     <div id="controls">
@@ -106,7 +110,23 @@
         <div class="section-title">播放</div>
         <div class="form-row"><label>快进快退秒数</label><input id="seekStepInput" type="number" min="1" max="600" class="ti" style="width:80px"> <span class="muted small-note">秒</span></div>
         <div class="form-row"><label>自动播放下一个</label><input id="autoNextCheck" type="checkbox"></div>
+        <div class="form-row"><label>记住播放进度</label><input id="resumeCheck" type="checkbox"></div>
         <div class="form-row"><label>字幕字号</label><input id="subFontRange" type="range" min="16" max="52" style="flex:1"><span id="subFontLabel" class="ctl-label"></span></div>
+
+        <div class="section-title">翻译（整句 / 点词）</div>
+        <div class="form-row"><label>翻译方式</label>
+          <select id="transProviderSelect" class="ti" style="flex:1">
+            <option value="free">免费通道（有道词典 + MyMemory，无需配置）</option>
+            <option value="api">OpenAI 兼容接口（复用语音识别的服务地址与 Key）</option>
+          </select>
+        </div>
+        <div id="transApiForm" class="form-row hidden"><label>对话模型名</label><input id="transModelInput" type="text" class="ti" placeholder="gpt-4o-mini"></div>
+        <div class="form-row"><label>译入语言</label>
+          <select id="transTargetSelect" class="ti" style="flex:1">
+            <option value="zh-CN">中文</option><option value="en">English</option>
+            <option value="ja">日本語</option><option value="ko">한국어</option>
+          </select>
+        </div>
 
         <div class="section-title">语音识别（跟读打分用）</div>
         <div class="form-row"><label>识别方式</label>
@@ -154,6 +174,7 @@
 <script src="js/scorer.js"></script>
 <script src="js/recorder.js"></script>
 <script src="js/asr.js"></script>
+<script src="js/translate.js"></script>
 <script src="js/hotkeys.js"></script>
 <script src="js/player.js"></script>
 <script src="js/playlist.js"></script>

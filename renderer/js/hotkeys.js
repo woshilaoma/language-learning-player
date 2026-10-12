@@ -20,6 +20,7 @@ const Hotkeys = (function () {
     { action: 'loopCue', key: 'KeyL', label: '循环本句' },
     { action: 'toggleSub', key: 'KeyH', label: '显示/隐藏字幕' },
     { action: 'subLang', key: 'KeyS', label: '切换字幕语言' },
+    { action: 'translateCue', key: 'KeyT', label: '整句翻译当前句' },
     { action: 'record', key: 'KeyR', label: '录音跟读' },
     { action: 'fullscreen', key: 'KeyF', label: '全屏' },
     { action: 'prevTrack', key: 'PageUp', label: '上一个视频' },

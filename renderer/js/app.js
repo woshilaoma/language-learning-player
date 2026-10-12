@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', function () {
   const VIDEO_EXTS = ['.mp4', '.m4v', '.mkv', '.webm', '.mov', '.avi', '.wmv', '.ts', '.mpg', '.mpeg', '.3gp', '.ogv', '.flv'];
   const SUB_EXTS = ['.srt', '.ass', '.ssa', '.vtt'];
   const HISTORY_KEY = 'llp.shadowHistory';
+  const PROGRESS_KEY = 'llp.progress';       /* 播放进度：{ [videoPath]: { t, d, at } } */
+  const PLSTATE_KEY = 'llp.playlistState';   /* 播放列表状态：{ paths: [], current: n } */
+  const BINDING_KEY = 'llp.subBinding';      /* 视频-字幕绑定：{ [videoPath]: [subPath, ...最多2个] } */
   const SUB_MODE_LABELS = { both: '双语', primary: '原文', secondary: '译文' };
 
   const video = $('#video');
@@ -13,9 +16,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let seeking = false;
   let lastCue = null;        /* 最近一条字幕，跟读参考用 */
+  let lastDisp = null;       /* 最近一次字幕显示 { primary, secondary, cue }，整句翻译用 */
   let recTimer = null;
   let recStart = 0;
   let lastVoiceBlob = null;  /* 最近一次跟读录音，供「播放我的录音」 */
+  let lastSave = 0;          /* 上次进度保存时间（onTime 节流用） */
 
   /* ================= 通用 UI 辅助 ================= */
 
@@ -154,13 +159,19 @@ document.addEventListener('DOMContentLoaded', function () {
              两个都非 cjk 或都 cjk 时按传入顺序前者为主
      - 1 个：解析后跑 analyzeBilingual 自动拆分「一句两行」的原文/译文
      opts.expectPath：快速切台守卫 —— 传入播放项路径，字幕就绪后若当前播放项
-     已不是该路径则放弃应用（返回 false）。成功返回 true。 */
+     已不是该路径则放弃应用（返回 false）。成功返回 true。
+     成功后把「当前播放视频 → 实际读取的字幕路径」写入绑定（opts.silent 可跳过）。 */
   async function loadSubtitleFiles(paths, opts) {
     if (!paths || !paths.length) return false;
     const expectPath = opts && opts.expectPath ? opts.expectPath : null;
     const isStale = function () {
       return !!expectPath &&
         !(Playlist.items[Playlist.current] && Playlist.items[Playlist.current].path === expectPath);
+    };
+    const bindIfPossible = function (subPaths) {
+      const cur = Playlist.items[Playlist.current];
+      if (!cur || (opts && opts.silent)) return;
+      saveBinding(cur.path, subPaths);
     };
     if (paths.length > 2) {
       toast('已忽略多余的字幕文件');
@@ -187,6 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
         renderSubList();
         switchTab('subs');
         toast('已加载双语字幕：' + subs[0].name + ' + ' + subs[1].name);
+        bindIfPossible([subs[0].path, subs[1].path]);
         return true;
       }
       const sub = await window.native.readSubtitle(paths[0]);
@@ -197,10 +209,136 @@ document.addEventListener('DOMContentLoaded', function () {
       renderSubList();
       switchTab('subs');
       toast(info.bilingual ? '已加载双语字幕：' + sub.name : '已加载字幕：' + sub.name);
+      bindIfPossible([sub.path]);
       return true;
     } catch (err) {
       toast('加载字幕失败：' + (err && err.message ? err.message : '未知错误'));
       return false;
+    }
+  }
+
+  /* ================= 进度记忆 / 字幕绑定 ================= */
+
+  /* 存储对象按值降序只保留最近 limit 条 */
+  function capObject(obj, limit, sortValue) {
+    const keys = Object.keys(obj);
+    if (keys.length <= limit) return obj;
+    keys.sort(function (a, b) { return sortValue(obj[b]) - sortValue(obj[a]); });
+    const out = {};
+    for (let i = 0; i < limit; i++) out[keys[i]] = obj[keys[i]];
+    return out;
+  }
+
+  /* 立即保存当前视频播放进度 */
+  function saveProgressNow() {
+    const it = Playlist.items[Playlist.current];
+    if (!it || !video.currentSrc) return;
+    const t = video.currentTime;
+    if (!isFinite(t) || t <= 0) return;
+    const prog = store.get(PROGRESS_KEY) || {};
+    prog[it.path] = { t: t, d: isFinite(video.duration) ? video.duration : 0, at: Date.now() };
+    store.set(PROGRESS_KEY, capObject(prog, 300, function (e) { return e.at || 0; }));
+  }
+
+  function removeProgress(path) {
+    const prog = store.get(PROGRESS_KEY) || {};
+    if (!(path in prog)) return;
+    delete prog[path];
+    store.set(PROGRESS_KEY, prog);
+  }
+
+  /* 播放列表持久化（onChange / onPlay 时写） */
+  function savePlaylistState() {
+    store.set(PLSTATE_KEY, {
+      paths: Playlist.items.map(function (i) { return i.path; }),
+      current: Playlist.current
+    });
+  }
+
+  /* 视频-字幕绑定：删除再加使最近绑定排在末尾；超 300 条丢最旧 */
+  function saveBinding(videoPath, subPaths) {
+    const binding = store.get(BINDING_KEY) || {};
+    delete binding[videoPath];
+    binding[videoPath] = subPaths.slice(0, 2);
+    const keys = Object.keys(binding);
+    if (keys.length > 300) {
+      const keep = {};
+      for (let i = keys.length - 300; i < keys.length; i++) keep[keys[i]] = binding[keys[i]];
+      store.set(BINDING_KEY, keep);
+      return;
+    }
+    store.set(BINDING_KEY, binding);
+  }
+
+  function removeBinding(videoPath) {
+    const binding = store.get(BINDING_KEY) || {};
+    if (!(videoPath in binding)) return;
+    delete binding[videoPath];
+    store.set(BINDING_KEY, binding);
+  }
+
+  /* ================= 字幕 overlay 与翻译 ================= */
+
+  /* 主字幕文本 → 可点击词 HTML：拉丁词 [A-Za-z\u00C0-\u024F']+ 为一个词，
+     CJK（汉字/假名/谚文）单字各成一个词，其余段原样；换行 → <br> */
+  function wordify(text) {
+    const s = String(text || '');
+    const re = /[A-Za-z\u00C0-\u024F']+|[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g;
+    let html = '';
+    let last = 0;
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      if (m.index > last) html += escHtml(s.slice(last, m.index));
+      html += '<span class="w" data-w="' + escHtml(m[0].toLowerCase()) + '">' + escHtml(m[0]) + '</span>';
+      last = m.index + m[0].length;
+    }
+    html += escHtml(s.slice(last));
+    return html.replace(/\n/g, '<br>');
+  }
+
+  /* 渲染字幕 overlay：主行词可点击、次行原样、已缓存译文自动带出、右上角整句翻译按钮 */
+  function renderOverlay(disp) {
+    if (!disp || !disp.cue || !disp.primary || Player.subMode === 'off') {
+      subtitleOverlay.innerHTML = '';
+      Translate.hideWordPopup();
+      return;
+    }
+    /* 译文模式但字幕没有译文时，兜底显示原文 */
+    const showPrimary = Player.subMode !== 'secondary' || !Player.hasSecondary();
+    const showSecondary = Player.subMode !== 'primary' && !!disp.secondary;
+    let html = '';
+    if (showPrimary) html += '<div class="sub-p">' + wordify(disp.primary) + '</div>';
+    if (showSecondary) html += '<div class="sub-s">' + escHtml(disp.secondary) + '</div>';
+    const cached = Translate.cachedSentence(disp.primary);
+    if (cached) html += '<div class="sub-t">' + escHtml(cached) + '</div>';
+    html += '<button class="sub-tr" title="整句翻译（T）">译</button>';
+    subtitleOverlay.innerHTML = html;
+  }
+
+  /* 整句翻译当前字幕（「译」按钮 / T 键） */
+  async function translateCurrentSentence() {
+    if (!lastDisp || !lastDisp.primary) {
+      toast('当前没有字幕');
+      return;
+    }
+    const text = lastDisp.primary;
+    let box = null;
+    /* 字幕可见时先在 overlay 上显示「翻译中…」（复用或新建 .sub-t） */
+    if (Player.subMode !== 'off' && subtitleOverlay.innerHTML !== '') {
+      box = subtitleOverlay.querySelector('.sub-t');
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'sub-t';
+        subtitleOverlay.appendChild(box);
+      }
+      box.textContent = '翻译中…';
+    }
+    try {
+      await Translate.sentence(text);
+      renderOverlay(lastDisp); /* 缓存已写入，重渲染自动带出译文 */
+    } catch (err) {
+      if (box && box.parentNode) box.remove();
+      toast('翻译失败：' + (err && err.message ? err.message : '未知错误'));
     }
   }
 
@@ -312,6 +450,11 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#timeCur').textContent = fmtTime(info.cur);
     $('#timeDur').textContent = fmtTime(info.dur);
     $('#btnPlay').textContent = video.paused ? '▶' : '⏸';
+    /* 播放中节流保存进度 */
+    if (!video.paused && Date.now() - lastSave > 5000) {
+      lastSave = Date.now();
+      saveProgressNow();
+    }
   };
   Player.onCueChange = function (disp, index) {
     const cue = disp ? disp.cue : null;
@@ -320,34 +463,61 @@ document.addEventListener('DOMContentLoaded', function () {
       /* 跟读参考只取原文 */
       $('#shadowRef').textContent = cue.primary || cue.text;
     }
-    if (Player.subMode === 'off' || !cue) {
-      subtitleOverlay.innerHTML = '';
-    } else {
-      /* 译文模式但字幕没有译文时，兜底显示原文 */
-      const showPrimary = Player.subMode !== 'secondary' || !Player.hasSecondary();
-      const showSecondary = Player.subMode !== 'primary' && !!disp.secondary;
-      let html = '';
-      if (showPrimary) html += '<div class="sub-p">' + escHtml(disp.primary || '') + '</div>';
-      if (showSecondary) html += '<div class="sub-s">' + escHtml(disp.secondary) + '</div>';
-      subtitleOverlay.innerHTML = html;
-    }
+    lastDisp = disp;
+    Translate.setCurrentContext(disp && disp.primary ? disp.primary : '');
+    Translate.hideWordPopup(); /* 换句后关闭查词弹窗 */
+    renderOverlay(disp);
     highlightSubItem(index);
   };
   Player.onEnded = function () {
     if (Settings.get('autoNext')) Playlist.next();
   };
 
+  /* 进度记忆：暂停即存、播完清除、关窗兜底保存 */
+  video.addEventListener('pause', saveProgressNow);
+  video.addEventListener('ended', function () {
+    const it = Playlist.items[Playlist.current];
+    if (it) removeProgress(it.path);
+  });
+  window.addEventListener('beforeunload', saveProgressNow);
+
+  /* 字幕 overlay 点击：整句翻译按钮 / 点词查词 */
+  subtitleOverlay.addEventListener('click', function (e) {
+    if (e.target.closest('.sub-tr')) {
+      translateCurrentSentence();
+      return;
+    }
+    const w = e.target.closest('span.w');
+    if (w) {
+      const r = $('#videoWrap').getBoundingClientRect();
+      Translate.showWordPopup(w.dataset.w || '', e.clientX - r.left, e.clientY - r.top);
+    }
+  });
+
   Playlist.onPlay = async function (item) {
     $('#nowPlaying').textContent = item.name;
     document.title = item.name + ' - 语言学习播放器';
     renderPlaylist();
+    savePlaylistState();
     $('#videoPlaceholder').classList.add('hidden');
     lastCue = null;
     $('#shadowRef').textContent = '播放视频后，这里显示当前字幕';
-    Player.open(item.url);
+    /* 进度记忆：只在「超过开头且未到片尾」时定位 */
+    const prog = (store.get(PROGRESS_KEY) || {})[item.path];
+    const resumeT = Settings.get('resume') && prog && prog.t > 10 && prog.d && prog.t < prog.d - 8 ? prog.t : 0;
+    Player.open(item.url, { autoplay: !Player.muteOpen, startAt: resumeT });
+    if (resumeT > 0) toast('已定位到上次播放位置 ' + fmtTime(resumeT));
 
     let loaded = false;
     try {
+      /* 1. 手动选过字幕的绑定优先 */
+      const binding = (store.get(BINDING_KEY) || {})[item.path];
+      if (binding && binding.length) {
+        loaded = await loadSubtitleFiles(binding, { expectPath: item.path });
+        if (loaded) return;
+        removeBinding(item.path); /* 绑定失效（字幕文件被删/移动），回退自动查找 */
+      }
+      /* 2. 同名自动查找 */
       const subPaths = await window.native.findSubtitlesForVideo(item.path);
       const stillCurrent = Playlist.items[Playlist.current] && Playlist.items[Playlist.current].path === item.path;
       if (stillCurrent && subPaths.length) {
@@ -364,7 +534,10 @@ document.addEventListener('DOMContentLoaded', function () {
       renderSubList();
     }
   };
-  Playlist.onChange = function () { renderPlaylist(); };
+  Playlist.onChange = function () {
+    renderPlaylist();
+    savePlaylistState();
+  };
 
   /* 恢复持久化状态到播放器与 UI */
   Player.setVolume(Settings.get('volume'));
@@ -396,6 +569,7 @@ document.addEventListener('DOMContentLoaded', function () {
     loopCue: function () { Player.toggleLoopCue(); syncLoopBtn(); },
     toggleSub: function () { handleToggleSub(); },
     subLang: function () { handleCycleSubLang(); },
+    translateCue: function () { translateCurrentSentence(); },
     record: function () { toggleRecord(); },
     fullscreen: function () { Player.toggleFullscreen(); },
     prevTrack: function () { Playlist.prev(); },
@@ -550,4 +724,21 @@ document.addEventListener('DOMContentLoaded', function () {
     if (videos.length) Playlist.add(videos);
     if (subs.length) loadSubtitleFiles(subs);
   });
+
+  /* ================= 启动恢复 ================= */
+
+  /* 恢复上次的播放列表与当前视频（暂停态定位，不自动出声），字幕照常加载 */
+  const psState = store.get(PLSTATE_KEY);
+  if (Settings.get('resume') && psState && Array.isArray(psState.paths) && psState.paths.length) {
+    const items = psState.paths.map(function (p) {
+      return { path: p, url: filePathToUrl(p), name: String(p).split(/[\\/]/).pop() };
+    });
+    Playlist.restore(items, Math.min(psState.current || 0, items.length - 1));
+    if (Playlist.current >= 0) {
+      Player.muteOpen = true; /* 本次 open 不自动播放 */
+      Playlist.play(Playlist.current);
+      Player.muteOpen = false;
+      toast('已恢复上次播放列表（' + items.length + ' 个视频），按空格继续', 3500);
+    }
+  }
 });

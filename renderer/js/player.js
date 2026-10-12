@@ -10,6 +10,8 @@ const Player = {
   subMode: 'both',            /* 'both' | 'primary' | 'secondary' | 'off' */
   lastSubMode: 'both',        /* 隐藏前的模式，恢复显示用 */
   lastDisp: { primary: '', secondary: '', cue: null },
+  pendingSeek: 0,             /* 打开后定位到的时间（loadedmetadata 时应用） */
+  muteOpen: false,            /* 一次性：open 时不自动播放（启动恢复用） */
 
   /* 由 app 赋值的回调 */
   /* onCueChange(disp, index)：disp = { primary, secondary, cue }
@@ -27,19 +29,36 @@ const Player = {
     videoEl.addEventListener('ended', () => {
       if (this.onEnded) this.onEnded();
     });
+    videoEl.addEventListener('loadedmetadata', () => {
+      if (this.pendingSeek > 0 && isFinite(videoEl.duration)) {
+        videoEl.currentTime = Math.min(this.pendingSeek, videoEl.duration - 1);
+      }
+      this.pendingSeek = 0;
+    });
+    videoEl.addEventListener('error', () => {
+      toast('视频无法加载或格式不支持');
+    });
     setInterval(() => { this.tick(); }, 80);
   },
 
-  open(url) {
+  /* opts：{ autoplay: true, startAt: 0 }
+     autoplay=false 时不调用 play()（src 赋值 + load()，暂停态等待用户操作）；
+     startAt>0 时在 loadedmetadata 后定位（进度记忆 / 恢复播放用） */
+  open(url, opts) {
     const v = this.video;
     if (!v) return;
+    opts = opts || {};
     this.cues = [];
     this.secondaryCues = [];
     this.cueIndex = -1;
     this.lastDisp = { primary: '', secondary: '', cue: null };
+    this.pendingSeek = opts.startAt > 0 ? Number(opts.startAt) : 0;
     v.src = url;
-    const p = v.play();
-    if (p && p.catch) p.catch(() => { /* 自动播放被拒绝时忽略 */ });
+    v.load();
+    if (opts.autoplay !== false) {
+      const p = v.play();
+      if (p && p.catch) p.catch(() => { /* 自动播放被拒绝时忽略 */ });
+    }
     if (this.onCueChange) this.onCueChange({ primary: '', secondary: '', cue: null }, -1);
   },
 

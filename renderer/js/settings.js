@@ -14,7 +14,11 @@ const Settings = {
     volume: 100,
     speed: 1,
     subMode: 'both',
-    loopCue: false
+    loopCue: false,
+    resume: true,
+    transProvider: 'free',
+    transModel: 'gpt-4o-mini',
+    transTarget: 'zh-CN'
   },
 
   data: {},
@@ -52,10 +56,18 @@ const Settings = {
     const apiForm = byId('apiForm');
     const wcForm = byId('wcForm');
     const asrLanguage = byId('asrLanguage');
+    const resumeCheck = byId('resumeCheck');
+    const transProviderSelect = byId('transProviderSelect');
+    const transApiForm = byId('transApiForm');
+    const transModelInput = byId('transModelInput');
+    const transTargetSelect = byId('transTargetSelect');
 
     const applyProvider = function (v) {
       apiForm.classList.toggle('hidden', v !== 'api');
       wcForm.classList.toggle('hidden', v !== 'whispercli');
+    };
+    const applyTransProvider = function (v) {
+      transApiForm.classList.toggle('hidden', v !== 'api');
     };
 
     /* 填充当前值 */
@@ -71,6 +83,11 @@ const Settings = {
     byId('wcExe').value = this.data.wcExe;
     byId('wcModel').value = this.data.wcModel;
     asrLanguage.value = this.data.asrLanguage;
+    resumeCheck.checked = !!this.data.resume;
+    transProviderSelect.value = this.data.transProvider;
+    applyTransProvider(this.data.transProvider);
+    transModelInput.value = this.data.transModel;
+    transTargetSelect.value = this.data.transTarget;
 
     /* 双向绑定：input / change -> set -> onChange */
     seekStepInput.addEventListener('input', function () {
@@ -101,6 +118,19 @@ const Settings = {
     bindText('wcModel', 'wcModel');
     asrLanguage.addEventListener('change', function () {
       Settings.set('asrLanguage', this.value);
+    });
+    resumeCheck.addEventListener('change', function () {
+      Settings.set('resume', this.checked);
+    });
+    transProviderSelect.addEventListener('change', function () {
+      Settings.set('transProvider', this.value);
+      applyTransProvider(this.value);
+    });
+    transModelInput.addEventListener('input', function () {
+      Settings.set('transModel', this.value);
+    });
+    transTargetSelect.addEventListener('change', function () {
+      Settings.set('transTarget', this.value);
     });
   }
 };

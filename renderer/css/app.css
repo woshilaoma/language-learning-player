@@ -55,13 +55,34 @@ body {
   border-radius: 6px;
   padding: 6px 14px;
   white-space: pre-line;
-  pointer-events: none;
+  pointer-events: auto;
   line-height: 1.5;
 }
 #subtitleOverlay:empty { display: none; }
 /* 双语字幕两行：主行（原文）默认继承，次行（译文）略小略淡 */
 #subtitleOverlay .sub-p { }
 #subtitleOverlay .sub-s { opacity: .82; font-size: .82em; margin-top: 2px; }
+/* 主行词汇可点击查词；次行 / 翻译行不响应鼠标 */
+#subtitleOverlay .sub-s, #subtitleOverlay .sub-t { pointer-events: none; }
+#subtitleOverlay .sub-p .w { cursor: pointer; }
+#subtitleOverlay .sub-p .w:hover { color: #ffd54f; text-decoration: underline; }
+/* 整句翻译按钮：overlay 右上角 */
+.sub-tr {
+  position: absolute;
+  right: -4px;
+  top: -26px;
+  background: rgba(30, 36, 52, .9);
+  border: 1px solid #3a4356;
+  color: #cfd6e4;
+  padding: 2px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+.sub-tr:hover { color: #fff; }
+/* 机翻结果行 */
+.sub-t { color: #ffd54f; opacity: .95; font-size: .82em; margin-top: 2px; }
 #videoPlaceholder {
   position: absolute;
   inset: 0;
@@ -99,6 +120,39 @@ body {
   animation: pulse 1s infinite;
 }
 @keyframes pulse { 50% { opacity: .25; } }
+
+/* ---------- 点词查词弹窗 ---------- */
+#wordPopup {
+  position: absolute;
+  z-index: 40;
+  min-width: 200px;
+  max-width: 340px;
+  background: #1c2230;
+  border: 1px solid #3a4356;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+}
+#wordPopup .wp-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#wpWord { font-weight: 600; color: #fff; }
+#wordPopup .wp-btn {
+  background: transparent;
+  border: none;
+  color: #8b93a7;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  font-family: inherit;
+}
+#wordPopup .wp-btn:hover { color: #fff; }
+#wpBody {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-line;
+  color: #cfd6e4;
+  user-select: text;
+}
 
 /* ---------- 控制条 ---------- */
 #controls {

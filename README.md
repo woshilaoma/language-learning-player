@@ -17,6 +17,8 @@ npm start
 - Add videos via **Open Videos** (multi-select) or **Open Folder** (auto-scans for video files), or just drag & drop files into the window.
 - Supported formats: mp4, m4v, mkv, webm, mov, avi, wmv, ts, mpg, 3gp, ogv, flv.
 - Toggle auto-play-next in Settings (on by default).
+- **Resume playback**: each video's position is remembered; the next time you open the app, the last playlist and video are restored (paused at your last position — press Space to continue).
+- **Video ↔ subtitle binding**: once you manually pick subtitles for a video, they are remembered and auto-loaded every time you play that video.
 
 ### 2. Subtitles
 - Loads .srt / .vtt / .ass / .ssa with automatic encoding detection (UTF-8 / UTF-16 / GB18030).
@@ -24,6 +26,8 @@ npm start
 - **Auto-loading**: when a video starts, the player looks for matching subtitles in the same folder (`movie.mp4` + `movie.srt`, or `movie.zh.srt`) — up to two are combined as bilingual.
 - Manual loading via **Load Subtitle** in the toolbar (multi-select supported).
 - The subtitle panel supports full-text search (both languages), click-to-seek on any line, and auto-scrolling highlight of the current line.
+- **Sentence translation**: click the 「译」 button on the subtitle or press `T` to translate the current line (shown as a golden line under the subtitle).
+- **Tap-to-look-up words**: click any word (or CJK character) in the subtitle line to get a dictionary popup with pronunciation, part of speech and meanings — plus a 🔊 button to hear it spoken.
 - Font size is adjustable in Settings; press `H` to show/hide subtitles.
 
 ### 3. Keyboard Shortcuts (all remappable in Settings)
@@ -35,8 +39,8 @@ npm start
 | `.` / `,` | Speed up / down (0.25x–3x) | `[` / `]` | Previous / next sentence |
 | `Enter` | Replay current sentence | `L` | Loop current sentence |
 | `H` | Show / hide subtitles | `S` | Switch subtitle language |
-| `R` | Record shadowing | `F` | Fullscreen |
-| `PageUp` / `PageDown` | Previous / next video | | |
+| `T` | Translate current sentence | `R` | Record shadowing |
+| `F` | Fullscreen | `PageUp` / `PageDown` | Previous / next video |
 
 ### 4. Two Seek Modes
 - **By seconds**: `←` / `→`; the step size is configurable in Settings (default 5 s).
@@ -56,7 +60,11 @@ Two interchangeable recognition engines (configured in Settings):
 2. Download a GGML model (e.g. `ggml-base.bin` or `ggml-large-v3.bin`)
 3. Fill in both paths in Settings and select "Local whisper.cpp CLI" as the provider
 
-### 6. Data Storage
+### 6. Translation Engines (Settings → Translation)
+- **Free (default)**: word lookup via Youdao Dictionary + sentence translation via MyMemory — no configuration needed, works in mainland China without a proxy.
+- **OpenAI-compatible API**: reuses the endpoint & API key from the speech recognition settings; set a chat model name (e.g. `gpt-4o-mini`).
+
+### 7. Data Storage
 Settings, hotkey bindings and shadowing history are stored locally (Chromium localStorage). Nothing is ever uploaded.
 
 ## Project Structure
