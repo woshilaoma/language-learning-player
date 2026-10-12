@@ -127,6 +127,9 @@ body {
   z-index: 40;
   min-width: 200px;
   max-width: 340px;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
   background: #1c2230;
   border: 1px solid #3a4356;
   border-radius: 10px;
@@ -152,6 +155,8 @@ body {
   white-space: pre-line;
   color: #cfd6e4;
   user-select: text;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* ---------- 控制条 ---------- */

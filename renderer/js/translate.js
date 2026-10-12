@@ -180,26 +180,45 @@ const Translate = (function () {
 
   /* ---------- 查词弹窗（挂在 videoWrap 内，全屏时同样显示） ---------- */
 
-  function showWordPopup(word, x, y) {
+  let popX = 0;  /* 最近一次弹窗锚点（相对 videoWrap），内容撑高后重新定位用 */
+  let popY = 0;
+
+  /* 按当前尺寸把弹窗放到锚点上方（字幕在视频底部，向上弹不会超出容器被裁剪）；
+     上方放不下则改到锚点下方；始终夹在 videoWrap 内（8px 边距） */
+  function placePopup() {
     const pop = document.getElementById('wordPopup');
     const wrap = document.getElementById('videoWrap');
     if (!pop || !wrap) return;
+    const pw = pop.offsetWidth;
+    const ph = pop.offsetHeight;
+    const W = wrap.clientWidth;
+    const H = wrap.clientHeight;
+    let top = popY - ph - 12;
+    if (top < 8) top = popY + 14;
+    top = clamp(top, 8, Math.max(8, H - ph - 8));
+    const left = clamp(popX - 10, 8, Math.max(8, W - pw - 8));
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+  }
+
+  function showWordPopup(word, x, y) {
+    const pop = document.getElementById('wordPopup');
+    if (!pop) return;
+    popX = x;
+    popY = y;
     pop.classList.remove('hidden');
     document.getElementById('wpWord').textContent = word;
     document.getElementById('wpBody').textContent = '查询中…';
-    /* 先显示拿尺寸，再 clamp 在 videoWrap 内（8px 边距）：右溢出左移、下溢出上移 */
-    const pw = pop.offsetWidth;
-    const ph = pop.offsetHeight;
-    const left = clamp(x, 8, Math.max(8, wrap.clientWidth - pw - 8));
-    const top = clamp(y, 8, Math.max(8, wrap.clientHeight - ph - 8));
-    pop.style.left = Math.round(left) + 'px';
-    pop.style.top = Math.round(top) + 'px';
+    placePopup();
     /* 异步查词（context 为当前字幕原句） */
     (async function () {
       try {
         const r = await lookupWord(word, currentContext);
         const body = document.getElementById('wpBody');
-        if (body) body.textContent = r || '未查到释义';
+        if (body) {
+          body.textContent = r || '未查到释义';
+          placePopup(); /* 内容撑高弹窗后重新定位，防止被容器裁剪 */
+        }
       } catch (err) {
         const body = document.getElementById('wpBody');
         if (body) body.textContent = '查询失败：' + (err && err.message ? err.message : '未知错误');
