@@ -13,6 +13,14 @@ npm install     # 首次
 npm start
 ```
 
+## 打包 Windows exe
+
+```bash
+npm run dist
+```
+
+产出 `release/LanguageLearningPlayer-Setup-<版本>.exe`（NSIS 安装版）和 `release/LanguageLearningPlayer-Portable-<版本>.exe`（单文件便携版）。国内网络注意事项：需设 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 与 `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`；若开着 Typora 等监视项目文件夹的编辑器，新生成的 `.asar` 可能被其锁住导致构建失败——关掉它，或用 `--config.directories.output` 指到项目外的目录构建。
+
 ## 功能与用法
 
 ### 1. 播放视频 / 播放列表

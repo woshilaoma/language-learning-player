@@ -13,6 +13,14 @@ npm install     # first run only
 npm start
 ```
 
+## Build a Windows exe
+
+```bash
+npm run dist
+```
+
+Produces `release/LanguageLearningPlayer-Setup-<version>.exe` (NSIS installer) and `release/LanguageLearningPlayer-Portable-<version>.exe` (single-file portable). Notes for mainland-China networks: set `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` and `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`; if a Markdown editor (Typora) is watching the project folder it may lock freshly-built `.asar` files — close it or build with `--config.directories.output` pointing outside the project.
+
 ## Features
 
 ### 1. Video Playback & Playlist

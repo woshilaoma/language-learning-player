@@ -2,16 +2,58 @@
   "name": "language-learning-player",
   "productName": "Language Learning Player",
   "version": "0.1.0",
-  "description": "面向语言学习的视频播放器：字幕、快捷键、逐句跳转、跟读打分、播放列表",
+  "description": "Language-learning video player: subtitles, sentence navigation, shadowing with scoring, playlist",
   "main": "main.js",
   "private": true,
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win"
   },
   "dependencies": {
     "iconv-lite": "^0.6.3"
   },
   "devDependencies": {
-    "electron": "^33.2.0"
+    "electron": "^33.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "author": "laoma",
+  "build": {
+    "appId": "com.laoma.language-learning-player",
+    "productName": "Language Learning Player",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Language Learning Player",
+      "artifactName": "LanguageLearningPlayer-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "LanguageLearningPlayer-Portable-${version}.exe"
+    }
   }
 }
