@@ -78,7 +78,7 @@ const Recorder = (function () {
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
     } catch (err) {
-      throw new Error('无法访问麦克风，请在 Windows 设置 → 隐私 → 麦克风中允许桌面应用');
+      throw new Error(I18N.t('err.mic'));
     }
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -103,7 +103,7 @@ const Recorder = (function () {
       if (ctx) { try { ctx.close(); } catch (e2) { /* 忽略 */ } }
       ctx = null; node = null; source = null; stream = null;
       state = 'idle';
-      throw new Error('初始化录音失败：' + (err && err.message ? err.message : '未知错误'));
+      throw new Error(I18N.t('err.recInit', { msg: err && err.message ? err.message : I18N.t('err.unknown') }));
     }
   }
 
@@ -151,7 +151,7 @@ const Recorder = (function () {
     playEl = audio; /* 保留引用，防止被回收中断播放 */
     audio.onended = function () { URL.revokeObjectURL(url); };
     const p = audio.play();
-    if (p && p.catch) p.catch(function () { toast('播放录音失败'); });
+    if (p && p.catch) p.catch(function () { toast(I18N.t('toast.playRecFail')); });
   }
 
   return {

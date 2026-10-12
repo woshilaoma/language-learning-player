@@ -1,0 +1,37 @@
+{
+  "en": {
+    "videos": "Choose video files",
+    "subs": "Choose subtitle files (multi-select; the first two form a bilingual pair)",
+    "folder": "Choose a folder (its videos will be added)"
+  },
+  "zh-CN": {
+    "videos": "选择视频文件",
+    "subs": "选择字幕文件（可多选，前两个将组成双语）",
+    "folder": "选择文件夹（添加其中的视频）"
+  },
+  "fr": {
+    "videos": "Choisir des fichiers vidéo",
+    "subs": "Choisir des fichiers de sous-titres (sélection multiple ; les deux premiers forment une paire bilingue)",
+    "folder": "Choisir un dossier (ses vidéos seront ajoutées)"
+  },
+  "de": {
+    "videos": "Videodateien auswählen",
+    "subs": "Untertiteldateien auswählen (Mehrfachauswahl; die ersten beiden bilden ein zweisprachiges Paar)",
+    "folder": "Ordner auswählen (seine Videos werden hinzugefügt)"
+  },
+  "ja": {
+    "videos": "動画ファイルを選択",
+    "subs": "字幕ファイルを選択（複数選択可、先頭の 2 つで二言語字幕になります）",
+    "folder": "フォルダーを選択（中の動画を追加します）"
+  },
+  "ko": {
+    "videos": "동영상 파일 선택",
+    "subs": "자막 파일 선택(여러 개 선택 가능, 처음 두 개가 2개 국어 자막을 이룹니다)",
+    "folder": "폴더 선택(폴더 안의 동영상이 추가됩니다)"
+  },
+  "es": {
+    "videos": "Elegir archivos de vídeo",
+    "subs": "Elegir archivos de subtítulos (selección múltiple; los dos primeros forman un par bilingüe)",
+    "folder": "Elegir una carpeta (sus vídeos se añadirán)"
+  }
+}

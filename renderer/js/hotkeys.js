@@ -4,33 +4,33 @@ const Hotkeys = (function () {
 
   const STORE_KEY = 'llp.hotkeys';
 
-  /* 固定顺序即 getAll / 渲染顺序 */
+  /* 固定顺序即 getAll / 渲染顺序；label 存 i18n 键名（hk.*），显示时经 I18N.t 解析 */
   const DEFAULTS = [
-    { action: 'playPause', key: 'Space', label: '播放/暂停' },
-    { action: 'seekFwd', key: 'ArrowRight', label: '快进' },
-    { action: 'seekBack', key: 'ArrowLeft', label: '快退' },
-    { action: 'volUp', key: 'ArrowUp', label: '音量+' },
-    { action: 'volDown', key: 'ArrowDown', label: '音量-' },
-    { action: 'mute', key: 'KeyM', label: '静音' },
-    { action: 'speedUp', key: 'Period', label: '加速' },
-    { action: 'speedDown', key: 'Comma', label: '减速' },
-    { action: 'prevCue', key: 'BracketLeft', label: '上一句' },
-    { action: 'nextCue', key: 'BracketRight', label: '下一句' },
-    { action: 'restartCue', key: 'Enter', label: '句首' },
-    { action: 'loopCue', key: 'KeyL', label: '循环本句' },
-    { action: 'toggleSub', key: 'KeyH', label: '显示/隐藏字幕' },
-    { action: 'subLang', key: 'KeyS', label: '切换字幕语言' },
-    { action: 'translateCue', key: 'KeyT', label: '整句翻译当前句' },
-    { action: 'record', key: 'KeyR', label: '录音跟读' },
-    { action: 'fullscreen', key: 'KeyF', label: '全屏' },
-    { action: 'prevTrack', key: 'PageUp', label: '上一个视频' },
-    { action: 'nextTrack', key: 'PageDown', label: '下一个视频' }
+    { action: 'playPause', key: 'Space', label: 'hk.playPause' },
+    { action: 'seekFwd', key: 'ArrowRight', label: 'hk.seekFwd' },
+    { action: 'seekBack', key: 'ArrowLeft', label: 'hk.seekBack' },
+    { action: 'volUp', key: 'ArrowUp', label: 'hk.volUp' },
+    { action: 'volDown', key: 'ArrowDown', label: 'hk.volDown' },
+    { action: 'mute', key: 'KeyM', label: 'hk.mute' },
+    { action: 'speedUp', key: 'Period', label: 'hk.speedUp' },
+    { action: 'speedDown', key: 'Comma', label: 'hk.speedDown' },
+    { action: 'prevCue', key: 'BracketLeft', label: 'hk.prevCue' },
+    { action: 'nextCue', key: 'BracketRight', label: 'hk.nextCue' },
+    { action: 'restartCue', key: 'Enter', label: 'hk.restartCue' },
+    { action: 'loopCue', key: 'KeyL', label: 'hk.loopCue' },
+    { action: 'toggleSub', key: 'KeyH', label: 'hk.toggleSub' },
+    { action: 'subLang', key: 'KeyS', label: 'hk.subLang' },
+    { action: 'translateCue', key: 'KeyT', label: 'hk.translateCue' },
+    { action: 'record', key: 'KeyR', label: 'hk.record' },
+    { action: 'fullscreen', key: 'KeyF', label: 'hk.fullscreen' },
+    { action: 'prevTrack', key: 'PageUp', label: 'hk.prevTrack' },
+    { action: 'nextTrack', key: 'PageDown', label: 'hk.nextTrack' }
   ];
 
   const MODIFIER_CODES = ['ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'ShiftLeft', 'ShiftRight', 'MetaLeft', 'MetaRight'];
 
+  /* '空格' / '小键盘n' 走 i18n（key.space / key.numpad），其余为符号不翻译 */
   const KEY_NAMES = {
-    Space: '空格',
     ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
     Enter: 'Enter', Escape: 'Esc', Tab: 'Tab', Backspace: 'Backspace',
     Delete: 'Del', Insert: 'Ins', Home: 'Home', End: 'End',
@@ -82,19 +82,19 @@ const Hotkeys = (function () {
       capturing = null;
       if (e.code === 'Escape') {
         renderTable();
-        toast('已取消设置快捷键');
+        toast(I18N.t('hk.cancelled'));
         return;
       }
       if (e.code === 'Backspace') {
         setCombo(action, null);
         renderTable();
-        toast('已清除快捷键：' + labelOf(action));
+        toast(I18N.t('hk.cleared', { name: labelOf(action) }));
         return;
       }
       const combo = comboFromEvent(e);
       setCombo(action, combo);
       renderTable();
-      toast(labelOf(action) + ' → ' + comboLabel(combo));
+      toast(I18N.t('hk.set', { name: labelOf(action), key: comboLabel(combo) }));
       return;
     }
     if (isEditable(document.activeElement)) return;
@@ -111,24 +111,25 @@ const Hotkeys = (function () {
 
   function labelOf(action) {
     for (let i = 0; i < DEFAULTS.length; i++) {
-      if (DEFAULTS[i].action === action) return DEFAULTS[i].label;
+      if (DEFAULTS[i].action === action) return I18N.t(DEFAULTS[i].label);
     }
     return action;
   }
 
   function keyName(code) {
+    if (code === 'Space') return I18N.t('key.space');
     if (KEY_NAMES[code]) return KEY_NAMES[code];
     let m = /^Key([A-Z])$/.exec(code);
     if (m) return m[1];
     m = /^Digit([0-9])$/.exec(code);
     if (m) return m[1];
     m = /^Numpad([0-9])$/.exec(code);
-    if (m) return '小键盘' + m[1];
+    if (m) return I18N.t('key.numpad', { n: m[1] });
     return code;
   }
 
   function comboLabel(combo) {
-    if (!combo) return '未绑定';
+    if (!combo) return I18N.t('hk.unbound');
     const parts = combo.split('+');
     const key = parts.pop();
     return parts.concat([keyName(key)]).join(' + ');
@@ -136,7 +137,7 @@ const Hotkeys = (function () {
 
   function getAll() {
     return DEFAULTS.map(function (d) {
-      return { action: d.action, label: d.label, combo: bindings[d.action] || null };
+      return { action: d.action, label: labelOf(d.action), combo: bindings[d.action] || null };
     });
   }
 
@@ -166,7 +167,7 @@ const Hotkeys = (function () {
       btn.className = 'hk-key';
       if (capturing === row.action) {
         btn.classList.add('capturing');
-        btn.textContent = '按新按键…（Esc取消 Backspace清除）';
+        btn.textContent = I18N.t('hk.capture');
       } else {
         btn.textContent = comboLabel(row.combo);
       }

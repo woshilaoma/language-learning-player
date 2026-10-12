@@ -36,7 +36,7 @@ const Player = {
       this.pendingSeek = 0;
     });
     videoEl.addEventListener('error', () => {
-      toast('视频无法加载或格式不支持');
+      toast(I18N.t('toast.videoLoadFail'));
     });
     setInterval(() => { this.tick(); }, 80);
   },
@@ -227,7 +227,7 @@ const Player = {
       if (p && p.catch) p.catch(() => { /* 忽略 */ });
     } else {
       const p = wrap.requestFullscreen();
-      if (p && p.catch) p.catch(() => { toast('无法进入全屏'); });
+      if (p && p.catch) p.catch(() => { toast(I18N.t('toast.cannotFullscreen')); });
     }
   },
 

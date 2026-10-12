@@ -4,6 +4,8 @@
 
 A local video player built with Electron, designed for language learning: external subtitles, sentence-by-sentence navigation, fully remappable hotkeys, microphone shadowing practice with scoring, and playlists. Everything runs locally — no server, no account.
 
+**UI languages**: English (default), 简体中文, Français, Deutsch, 日本語, 한국어, Español — switch anytime in Settings → Language.
+
 ## Getting Started
 
 ```bash

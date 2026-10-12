@@ -5,6 +5,10 @@ const os = require('os');
 const { execFile } = require('child_process');
 const iconv = require('iconv-lite');
 
+/* 文件对话框标题的各语言文案（与渲染进程 i18n 字典同源） */
+const DIALOG_TITLES = require('./renderer/js/i18n/titles.json');
+let uiLang = 'en';
+
 const SUB_EXTS = ['.srt', '.ass', '.ssa', '.vtt'];
 const VIDEO_EXTS = ['.mp4', '.m4v', '.mkv', '.webm', '.mov', '.avi', '.wmv', '.ts', '.mpg', '.mpeg', '.3gp', '.ogv', '.flv'];
 
@@ -53,9 +57,14 @@ function decodeText(buf) {
 const VIDEO_FILTER = { name: '视频', extensions: VIDEO_EXTS.map(e => e.slice(1)) };
 const SUB_FILTER = { name: '字幕', extensions: SUB_EXTS.map(e => e.slice(1)) };
 
+/* 渲染进程启动 / 切语言时同步；titles.json 缺该语言时回退 en */
+ipcMain.handle('app:setLang', (_e, code) => {
+  uiLang = DIALOG_TITLES[code] ? code : 'en';
+});
+
 ipcMain.handle('dialog:openVideos', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: '选择视频文件',
+    title: (DIALOG_TITLES[uiLang] || DIALOG_TITLES.en).videos,
     properties: ['openFile', 'multiSelections'],
     filters: [VIDEO_FILTER, { name: '所有文件', extensions: ['*'] }]
   });
@@ -64,7 +73,7 @@ ipcMain.handle('dialog:openVideos', async () => {
 
 ipcMain.handle('dialog:openSubtitle', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: '选择字幕文件（可多选，前两个将组成双语）',
+    title: (DIALOG_TITLES[uiLang] || DIALOG_TITLES.en).subs,
     properties: ['openFile', 'multiSelections'],
     filters: [SUB_FILTER, { name: '所有文件', extensions: ['*'] }]
   });
@@ -73,7 +82,7 @@ ipcMain.handle('dialog:openSubtitle', async () => {
 
 ipcMain.handle('dialog:openFolder', async () => {
   const r = await dialog.showOpenDialog(win, {
-    title: '选择文件夹（添加其中的视频）',
+    title: (DIALOG_TITLES[uiLang] || DIALOG_TITLES.en).folder,
     properties: ['openDirectory']
   });
   if (r.canceled || !r.filePaths.length) return [];

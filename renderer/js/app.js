@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const PROGRESS_KEY = 'llp.progress';       /* 播放进度：{ [videoPath]: { t, d, at } } */
   const PLSTATE_KEY = 'llp.playlistState';   /* 播放列表状态：{ paths: [], current: n } */
   const BINDING_KEY = 'llp.subBinding';      /* 视频-字幕绑定：{ [videoPath]: [subPath, ...最多2个] } */
-  const SUB_MODE_LABELS = { both: '双语', primary: '原文', secondary: '译文' };
 
   const video = $('#video');
   const subtitleOverlay = $('#subtitleOverlay');
@@ -20,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let transHidden = false;   /* 当前句的译文被手动收起（切换句子后自动重置） */
   let recTimer = null;
   let recStart = 0;
+  let asrBusy = false;       /* 跟读识别进行中（shadowStatus 显示占位文案用） */
   let lastVoiceBlob = null;  /* 最近一次跟读录音，供「播放我的录音」 */
   let lastSave = 0;          /* 上次进度保存时间（onTime 节流用） */
 
@@ -34,14 +34,38 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  /* 字幕显示模式标签（both/primary/secondary → 当前语言文案） */
+  function subModeLabel(m) {
+    return I18N.t('subMode.' + m);
+  }
+
   /* 字幕相关按钮与当前显示模式同步：
      - 「字幕」按钮：非 off 即点亮
      - 「语言」按钮：显示当前（off 时显示上次）模式的标签，双语模式点亮 */
   function subUiSync() {
     $('#btnToggleSub').classList.toggle('active', Player.subMode !== 'off');
     const shown = Player.subMode !== 'off' ? Player.subMode : (Player.lastSubMode || 'both');
-    $('#btnSubLang').textContent = SUB_MODE_LABELS[shown] || '双语';
+    $('#btnSubLang').textContent = subModeLabel(shown);
     $('#btnSubLang').classList.toggle('active', shown === 'both');
+  }
+
+  /* 切换语言后重渲染动态文本（静态 data-i18n 部分由 I18N.applyDom 处理） */
+  function applyLangUI() {
+    I18N.applyDom();
+    subUiSync();
+    updateSpeedLabel();
+    const step = Settings.get('seekStep');
+    $('#seekStepLabel').textContent = step + I18N.t('set.seconds');
+    $('#seekStepLabel2').textContent = step + I18N.t('set.seconds');
+    const b2 = $('#btnRecord2');
+    b2.textContent = b2.classList.contains('recording') ? I18N.t('shadow.stop') : I18N.t('shadow.start');
+    renderSubList();
+    renderHistory();
+    Hotkeys.renderTable($('#hotkeyTable'));
+    $('#shadowRef').textContent = lastCue ? (lastCue.primary || lastCue.text) : I18N.t('shadow.placeholder');
+    if (asrBusy) $('#shadowStatus').textContent = I18N.t('toast.recognizing');
+    const it = Playlist.items[Playlist.current];
+    document.title = it && video.currentSrc ? it.name + ' - ' + I18N.t('app.name') : I18N.t('app.name');
   }
 
   function handleToggleSub() {
@@ -52,11 +76,11 @@ document.addEventListener('DOMContentLoaded', function () {
   function handleCycleSubLang() {
     const m = Player.cycleSubLang();
     if (m === null) {
-      toast('当前字幕只有一种语言');
+      toast(I18N.t('toast.subOnlyOneLang'));
       return;
     }
     subUiSync();
-    toast('字幕：' + (SUB_MODE_LABELS[m] || m));
+    toast(I18N.t('toast.subModeSet', { mode: subModeLabel(m) }));
   }
 
   function syncVolumeUi() {
@@ -88,7 +112,7 @@ document.addEventListener('DOMContentLoaded', function () {
       parts.push('<li class="p-item' + (i === Playlist.current ? ' active' : '') + '" data-index="' + i + '">' +
         '<span class="idx">' + (i + 1) + '</span>' +
         '<span class="nm">' + escHtml(it.name) + '</span>' +
-        '<button class="del" type="button" title="移除">✕</button></li>');
+        '<button class="del" type="button" title="' + escHtml(I18N.t('pl.remove')) + '">✕</button></li>');
     }
     $('#playlist').innerHTML = parts.join('');
   }
@@ -127,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function () {
         '<div class="s-text">' + escHtml(text) + '</div></div>');
     }
     $('#subList').innerHTML = parts.join('');
-    $('#subCount').textContent = cues.length ? '共 ' + parts.length + ' 句' : '未加载字幕';
+    $('#subCount').textContent = cues.length ? I18N.t('sub.count', { n: parts.length }) : I18N.t('sub.none');
     highlightSubItem(Player.cueIndex);
   }
 
@@ -175,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
       saveBinding(cur.path, subPaths);
     };
     if (paths.length > 2) {
-      toast('已忽略多余的字幕文件');
+      toast(I18N.t('toast.ignoreExtraSubs'));
       paths = paths.slice(0, 2);
     }
     try {
@@ -198,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function () {
         Player.setCues(cuesP, cuesS);
         renderSubList();
         switchTab('subs');
-        toast('已加载双语字幕：' + subs[0].name + ' + ' + subs[1].name);
+        toast(I18N.t('toast.loadedBiSub', { a: subs[0].name, b: subs[1].name }));
         bindIfPossible([subs[0].path, subs[1].path]);
         return true;
       }
@@ -209,11 +233,14 @@ document.addEventListener('DOMContentLoaded', function () {
       Player.setCues(cues);
       renderSubList();
       switchTab('subs');
-      toast(info.bilingual ? '已加载双语字幕：' + sub.name : '已加载字幕：' + sub.name);
+      /* 单文件自动拆出双语时无第二个文件名，去掉「{a} + {b}」的尾部空档 */
+      toast(info.bilingual
+        ? I18N.t('toast.loadedBiSub', { a: sub.name, b: '' }).replace(/\s*\+\s*$/, '')
+        : I18N.t('toast.loadedSub', { name: sub.name }));
       bindIfPossible([sub.path]);
       return true;
     } catch (err) {
-      toast('加载字幕失败：' + (err && err.message ? err.message : '未知错误'));
+      toast(I18N.t('toast.loadSubFail', { msg: err && err.message ? err.message : I18N.t('err.unknown') }));
       return false;
     }
   }
@@ -312,14 +339,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (showSecondary) html += '<div class="sub-s">' + escHtml(disp.secondary) + '</div>';
     const cached = !transHidden && Translate.cachedSentence(disp.primary);
     if (cached) html += '<div class="sub-t">' + escHtml(cached) + '</div>';
-    html += '<button class="sub-tr' + (cached ? ' active' : '') + '" title="整句翻译（T），再按一次收起/展开">译</button>';
+    html += '<button class="sub-tr' + (cached ? ' active' : '') + '" title="' + escHtml(I18N.t('hk.translateCue')) + ' (T)">T</button>';
     subtitleOverlay.innerHTML = html;
   }
 
   /* 整句翻译当前字幕（「译」按钮 / T 键） */
   async function translateCurrentSentence() {
     if (!lastDisp || !lastDisp.primary) {
-      toast('当前没有字幕');
+      toast(I18N.t('toast.noSubtitles'));
       return;
     }
     const text = lastDisp.primary;
@@ -338,7 +365,7 @@ document.addEventListener('DOMContentLoaded', function () {
         box.className = 'sub-t';
         subtitleOverlay.appendChild(box);
       }
-      box.textContent = '翻译中…';
+      box.textContent = I18N.t('toast.translating');
     }
     try {
       await Translate.sentence(text);
@@ -346,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function () {
       renderOverlay(lastDisp); /* 缓存已写入，重渲染自动带出译文 */
     } catch (err) {
       if (box && box.parentNode) box.remove();
-      toast('翻译失败：' + (err && err.message ? err.message : '未知错误'));
+      toast(I18N.t('toast.transFail', { msg: err && err.message ? err.message : I18N.t('err.unknown') }));
     }
   }
 
@@ -358,17 +385,17 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#btnRecord').classList.remove('recording');
     const b2 = $('#btnRecord2');
     b2.classList.remove('recording');
-    b2.textContent = '🎙 开始录音（R）';
+    b2.textContent = I18N.t('shadow.start');
   }
 
   async function toggleRecord() {
     if (Recorder.state !== 'recording') {
-      if (!video.currentSrc) { toast('请先打开视频'); return; }
+      if (!video.currentSrc) { toast(I18N.t('toast.openVideoFirst')); return; }
       try {
         recStart = Date.now();
         await Recorder.start();
       } catch (err) {
-        toast(err && err.message ? err.message : '无法访问麦克风');
+        toast(err && err.message ? err.message : I18N.t('err.mic'));
         return;
       }
       $('#recTime').textContent = '0.0s';
@@ -376,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function () {
       $('#btnRecord').classList.add('recording');
       const b2 = $('#btnRecord2');
       b2.classList.add('recording');
-      b2.textContent = '⏹ 停止录音';
+      b2.textContent = I18N.t('shadow.stop');
       recTimer = setInterval(function () {
         $('#recTime').textContent = ((Date.now() - recStart) / 1000).toFixed(1) + 's';
       }, 100);
@@ -384,21 +411,24 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     stopRecUi();
     const res = await Recorder.stop();
-    if (!res || !res.ok) { toast('录音太短'); return; }
+    if (!res || !res.ok) { toast(I18N.t('toast.recTooShort')); return; }
     lastVoiceBlob = res.wavBlob;
     const statusEl = $('#shadowStatus');
     statusEl.classList.remove('err');
-    statusEl.textContent = '识别中…';
+    statusEl.textContent = I18N.t('toast.recognizing');
+    asrBusy = true;
     let text = '';
     try {
       text = await Asr.transcribe(res);
     } catch (err) {
-      const msg = err && err.message ? err.message : '识别失败';
+      const msg = err && err.message ? err.message : I18N.t('err.unknown');
+      asrBusy = false;
       statusEl.classList.add('err');
       statusEl.textContent = msg;
       toast(msg);
       return;
     }
+    asrBusy = false;
     handleShadowResult(text);
   }
 
@@ -410,17 +440,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const ref = lastCue ? (lastCue.primary || lastCue.text) : '';
     const scoreNum = $('#scoreNum');
+    const clsName = function (c) { return I18N.t('diff.' + c); };
     let score = null;
     if (ref) {
       const r = Scorer.compare(ref, text);
       score = r.score;
       scoreNum.textContent = String(score);
       scoreNum.className = score >= 80 ? 'good' : (score >= 60 ? 'mid' : 'bad');
-      $('#diffRef').innerHTML = r.refTokens.map(function (t) {
-        return '<span class="' + t.cls + '">' + escHtml(t.t) + '</span>';
+      $('#diffRef').innerHTML = r.refTokens.map(function (tok) {
+        return '<span class="' + tok.cls + '" title="' + escHtml(clsName(tok.cls)) + '">' + escHtml(tok.t) + '</span>';
       }).join(' ');
-      $('#diffHyp').innerHTML = r.hypTokens.map(function (t) {
-        return '<span class="' + t.cls + '">' + escHtml(t.t) + '</span>';
+      $('#diffHyp').innerHTML = r.hypTokens.map(function (tok) {
+        return '<span class="' + tok.cls + '" title="' + escHtml(clsName(tok.cls)) + '">' + escHtml(tok.t) + '</span>';
       }).join(' ');
     } else {
       scoreNum.textContent = '--';
@@ -441,12 +472,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
   Settings.load();
   Settings.bindForm();
+  /* 在任何渲染之前应用语言（须在 Settings.load/bindForm 之后） */
+  I18N.setLang(Settings.get('lang') || 'en');
+  window.native.setLang(I18N.getLang());
   Settings.onChange = function (key, val) {
     if (key === 'seekStep') {
-      $('#seekStepLabel').textContent = val + 's';
-      $('#seekStepLabel2').textContent = val + 's';
+      $('#seekStepLabel').textContent = val + I18N.t('set.seconds');
+      $('#seekStepLabel2').textContent = val + I18N.t('set.seconds');
     } else if (key === 'subFont') {
       subtitleOverlay.style.fontSize = val + 'px';
+    } else if (key === 'lang') {
+      I18N.setLang(val);
+      window.native.setLang(I18N.getLang());
+      applyLangUI();
+      /* 提示里的语言名用该语言自己的名字（下拉 option 原文） */
+      const opt = $('#langSelect option[value="' + I18N.getLang() + '"]');
+      toast(I18N.t('toast.langSet', { name: opt ? opt.textContent : I18N.getLang() }));
     }
   };
 
@@ -512,17 +553,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   Playlist.onPlay = async function (item) {
     $('#nowPlaying').textContent = item.name;
-    document.title = item.name + ' - 语言学习播放器';
+    document.title = item.name + ' - ' + I18N.t('app.name');
     renderPlaylist();
     savePlaylistState();
     $('#videoPlaceholder').classList.add('hidden');
     lastCue = null;
-    $('#shadowRef').textContent = '播放视频后，这里显示当前字幕';
+    $('#shadowRef').textContent = I18N.t('shadow.placeholder');
     /* 进度记忆：只在「超过开头且未到片尾」时定位 */
     const prog = (store.get(PROGRESS_KEY) || {})[item.path];
     const resumeT = Settings.get('resume') && prog && prog.t > 10 && prog.d && prog.t < prog.d - 8 ? prog.t : 0;
     Player.open(item.url, { autoplay: !Player.muteOpen, startAt: resumeT });
-    if (resumeT > 0) toast('已定位到上次播放位置 ' + fmtTime(resumeT));
+    if (resumeT > 0) toast(I18N.t('toast.resumedPos', { time: fmtTime(resumeT) }));
 
     let loaded = false;
     try {
@@ -540,10 +581,10 @@ document.addEventListener('DOMContentLoaded', function () {
         /* expectPath：字幕加载完成后再次核对，防止快速切台时串台 */
         loaded = await loadSubtitleFiles(subPaths, { expectPath: item.path });
       } else if (!subPaths.length) {
-        toast('未找到匹配的字幕文件，可手动加载');
+        toast(I18N.t('toast.noSubFound'));
       }
     } catch (err) {
-      toast('字幕加载失败：' + (err && err.message ? err.message : '未知错误'));
+      toast(I18N.t('toast.loadSubFail', { msg: err && err.message ? err.message : I18N.t('err.unknown') }));
     }
     if (!loaded && Playlist.items[Playlist.current] && Playlist.items[Playlist.current].path === item.path) {
       Player.setCues([]);
@@ -566,8 +607,8 @@ document.addEventListener('DOMContentLoaded', function () {
   syncVolumeUi();
   updateSpeedLabel();
   subtitleOverlay.style.fontSize = Settings.get('subFont') + 'px';
-  $('#seekStepLabel').textContent = Settings.get('seekStep') + 's';
-  $('#seekStepLabel2').textContent = Settings.get('seekStep') + 's';
+  $('#seekStepLabel').textContent = Settings.get('seekStep') + I18N.t('set.seconds');
+  $('#seekStepLabel2').textContent = Settings.get('seekStep') + I18N.t('set.seconds');
   renderHistory();
 
   Hotkeys.init({
@@ -623,11 +664,11 @@ document.addEventListener('DOMContentLoaded', function () {
     video.load();
     $('#videoPlaceholder').classList.remove('hidden');
     $('#nowPlaying').textContent = '';
-    document.title = '语言学习播放器';
+    document.title = I18N.t('app.name');
     Player.setCues([]);
     renderSubList();
     lastCue = null;
-    $('#shadowRef').textContent = '播放视频后，这里显示当前字幕';
+    $('#shadowRef').textContent = I18N.t('shadow.placeholder');
   });
 
   /* ================= 播放列表交互 ================= */
@@ -731,12 +772,12 @@ document.addEventListener('DOMContentLoaded', function () {
   $('#btnHearRef').addEventListener('click', function () { Player.restartCue(); });
   $('#btnPlayMyVoice').addEventListener('click', function () {
     if (lastVoiceBlob) Recorder.playBlob(lastVoiceBlob);
-    else toast('还没有录音可播放');
+    else toast(I18N.t('shadow.noVoice'));
   });
   $('#btnClearHistory').addEventListener('click', function () {
     store.set(HISTORY_KEY, []);
     renderHistory();
-    toast('已清空跟读记录');
+    toast(I18N.t('shadow.cleared'));
   });
 
   /* ================= 设置页 ================= */
@@ -744,7 +785,7 @@ document.addEventListener('DOMContentLoaded', function () {
   $('#btnResetHotkeys').addEventListener('click', function () {
     Hotkeys.reset();
     Hotkeys.renderTable($('#hotkeyTable'));
-    toast('已恢复默认快捷键');
+    toast(I18N.t('hk.reset'));
   });
 
   /* ================= Tab 切换 ================= */
@@ -794,7 +835,7 @@ document.addEventListener('DOMContentLoaded', function () {
       Player.muteOpen = true; /* 本次 open 不自动播放 */
       Playlist.play(Playlist.current);
       Player.muteOpen = false;
-      toast('已恢复上次播放列表（' + items.length + ' 个视频），按空格继续', 3500);
+      toast(I18N.t('toast.restoredList', { n: items.length }), 3500);
     }
   }
 });

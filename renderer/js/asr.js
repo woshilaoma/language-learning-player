@@ -29,12 +29,12 @@ const Asr = (function () {
         body: form
       });
     } catch (err) {
-      throw new Error('无法连接识别服务，请检查网络或服务地址');
+      throw new Error(I18N.t('err.asrNetwork'));
     }
     if (!res.ok) {
-      if (res.status === 401) throw new Error('API Key 无效或无权限');
-      if (res.status === 404) throw new Error('服务地址或模型名不正确');
-      throw new Error('请求失败(HTTP ' + res.status + ')');
+      if (res.status === 401) throw new Error(I18N.t('err.key401'));
+      if (res.status === 404) throw new Error(I18N.t('err.key404'));
+      throw new Error(I18N.t('err.asrHttp', { code: res.status }));
     }
     let data = null;
     try { data = await res.json(); } catch (err) { data = null; }
@@ -44,6 +44,10 @@ const Asr = (function () {
 
   /* 本地 whisper.cpp：走 IPC，主进程错误 message 原样透传 */
   async function whisperCli(rec) {
+    /* 未配置时直接给本地化提示（主进程另有兜底检查） */
+    if (!Settings.get('wcExe') || !Settings.get('wcModel')) {
+      throw new Error(I18N.t('err.wcMissing'));
+    }
     let out;
     try {
       out = await window.native.whisperCli({

@@ -6,7 +6,8 @@ const Translate = (function () {
   const cache = new Map();  /* 's:'+句子 → 译文；'w:'+词 → 查词结果 */
   let currentContext = '';  /* 当前字幕原句，查词时作上下文（app 在 onCueChange 里更新） */
 
-  const TARGET_NAMES = { 'zh-CN': '中文', 'en': 'English', 'ja': '日本語', 'ko': '한국어' };
+  /* chat 提示词里的目标语言名（英文拼写即可，模型按语言码识别） */
+  const TARGET_NAMES = { 'zh-CN': 'Chinese', 'en': 'English', 'ja': 'Japanese', 'ko': 'Korean' };
   const TTS_LANGS = { 'zh-CN': 'zh-CN', 'ja': 'ja-JP', 'ko': 'ko-KR', 'ru': 'ru-RU', 'en': 'en-US' };
 
   /* 语言检测：假名 → ja、谚文 → ko、汉字 → zh-CN、西里尔 → ru，否则 en */
@@ -44,12 +45,12 @@ const Translate = (function () {
         })
       });
     } catch (err) {
-      throw new Error('无法连接翻译服务');
+      throw new Error(I18N.t('err.transNetworkApi'));
     }
     if (!res.ok) {
-      if (res.status === 401) throw new Error('API Key 无效或无权限');
-      if (res.status === 404) throw new Error('服务地址或模型名不正确');
-      throw new Error('翻译请求失败(HTTP ' + res.status + ')');
+      if (res.status === 401) throw new Error(I18N.t('err.key401'));
+      if (res.status === 404) throw new Error(I18N.t('err.key404'));
+      throw new Error(I18N.t('err.transHttp', { code: res.status }));
     }
     let data = null;
     try { data = await res.json(); } catch (err) { data = null; }
@@ -68,13 +69,13 @@ const Translate = (function () {
         encodeURIComponent(text.slice(0, 480)) +
         '&langpair=' + encodeURIComponent(src + '|' + tgt));
     } catch (err) {
-      throw new Error('无法连接翻译服务（MyMemory）');
+      throw new Error(I18N.t('err.transNetwork'));
     }
     let json = null;
     try { json = await res.json(); } catch (err) { json = null; }
-    if (!json || !json.responseData) throw new Error('翻译服务错误：响应格式不正确');
+    if (!json || !json.responseData) throw new Error(I18N.t('err.transBad', { msg: I18N.t('err.unknown') }));
     if (Number(json.responseStatus) !== 200) {
-      throw new Error('翻译服务错误：' + (json.responseDetails || json.responseStatus));
+      throw new Error(I18N.t('err.transBad', { msg: json.responseDetails || json.responseStatus }));
     }
     return String(json.responseData.translatedText || '').trim();
   }
@@ -91,7 +92,7 @@ const Translate = (function () {
     let out;
     if (Settings.get('transProvider') === 'api') {
       const tgt = pickTarget(detectLang(text));
-      out = await chat('Translate into ' + (TARGET_NAMES[tgt] || '中文') + '(' + tgt +
+      out = await chat('Translate into ' + (TARGET_NAMES[tgt] || 'Chinese') + '(' + tgt +
         '). Reply with ONLY the translation, no quotes:\n' + text);
     } else {
       out = await viaMyMemory(text);
@@ -142,7 +143,7 @@ const Translate = (function () {
         if (typeof v === 'string' && v.trim()) means.push(v.trim());
       });
     }
-    if (!means.length) return '未查到释义';
+    if (!means.length) return I18N.t('err.noDef');
     const lines = [phone ? word + ' [' + phone + ']' : word];
     means.slice(0, 4).forEach(function (m) {
       lines.push(m.length > 60 ? m.slice(0, 60) + '…' : m);
@@ -160,15 +161,15 @@ const Translate = (function () {
       const tgt = Settings.get('transTarget') || 'zh-CN';
       out = await chat('You are a dictionary. For the word/phrase "' + word + '" (context: "' +
         (context || '') + '"), reply within 3 short lines: pronunciation (IPA or pinyin), part of speech, meanings in ' +
-        (TARGET_NAMES[tgt] || '中文') + '. No preamble.');
+        (TARGET_NAMES[tgt] || 'Chinese') + '. No preamble.');
     } else {
       let res;
       try {
         res = await fetch('https://dict.youdao.com/jsonapi?q=' + encodeURIComponent(word));
       } catch (err) {
-        throw new Error('无法连接翻译服务（有道）');
+        throw new Error(I18N.t('err.youdaoNetwork'));
       }
-      if (!res.ok) throw new Error('翻译服务错误（有道 HTTP ' + res.status + ')');
+      if (!res.ok) throw new Error(I18N.t('err.youdaoHttp', { code: res.status }));
       let json = null;
       try { json = await res.json(); } catch (err) { json = null; }
       out = parseYoudao(json, word);
@@ -208,7 +209,7 @@ const Translate = (function () {
     popY = y;
     pop.classList.remove('hidden');
     document.getElementById('wpWord').textContent = word;
-    document.getElementById('wpBody').textContent = '查询中…';
+    document.getElementById('wpBody').textContent = I18N.t('toast.translating');
     placePopup();
     /* 异步查词（context 为当前字幕原句） */
     (async function () {
@@ -216,12 +217,12 @@ const Translate = (function () {
         const r = await lookupWord(word, currentContext);
         const body = document.getElementById('wpBody');
         if (body) {
-          body.textContent = r || '未查到释义';
+          body.textContent = r || I18N.t('err.noDef');
           placePopup(); /* 内容撑高弹窗后重新定位，防止被容器裁剪 */
         }
       } catch (err) {
         const body = document.getElementById('wpBody');
-        if (body) body.textContent = '查询失败：' + (err && err.message ? err.message : '未知错误');
+        if (body) body.textContent = I18N.t('err.queryFail', { msg: err && err.message ? err.message : I18N.t('err.unknown') });
       }
     })();
   }

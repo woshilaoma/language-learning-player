@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('native', {
+  setLang: code => ipcRenderer.invoke('app:setLang', code), /* 同步主进程对话框语言 */
   chooseVideos: () => ipcRenderer.invoke('dialog:openVideos'),
   chooseSubtitle: () => ipcRenderer.invoke('dialog:openSubtitle'), /* 返回路径数组，取消为 [] */
   chooseFolder: () => ipcRenderer.invoke('dialog:openFolder'),

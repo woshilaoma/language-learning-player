@@ -1,6 +1,7 @@
 /* 设置：默认值、localStorage 持久化、设置表单双向绑定 */
 const Settings = {
   defaults: {
+    lang: 'en',
     seekStep: 5,
     autoNext: true,
     subFont: 26,
@@ -61,6 +62,7 @@ const Settings = {
     const transApiForm = byId('transApiForm');
     const transModelInput = byId('transModelInput');
     const transTargetSelect = byId('transTargetSelect');
+    const langSelect = byId('langSelect');
 
     const applyProvider = function (v) {
       apiForm.classList.toggle('hidden', v !== 'api');
@@ -88,6 +90,9 @@ const Settings = {
     applyTransProvider(this.data.transProvider);
     transModelInput.value = this.data.transModel;
     transTargetSelect.value = this.data.transTarget;
+    /* 存过但下拉里没有的语言（如字典尚缺）回退 en */
+    langSelect.value = this.data.lang || 'en';
+    if (langSelect.value !== (this.data.lang || 'en')) langSelect.value = 'en';
 
     /* 双向绑定：input / change -> set -> onChange */
     seekStepInput.addEventListener('input', function () {
@@ -131,6 +136,9 @@ const Settings = {
     });
     transTargetSelect.addEventListener('change', function () {
       Settings.set('transTarget', this.value);
+    });
+    langSelect.addEventListener('change', function () {
+      Settings.set('lang', this.value);
     });
   }
 };
